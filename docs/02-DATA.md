@@ -225,6 +225,7 @@ Rules that come with it:
 2. Parse timestamps; drop rows that fail (count them).
 3. Drop rows with amount ≤ 0 (count them).
 4. Drop exact duplicate rows (count them).
+4a. **IBM only:** drop rows after 2022-09-10 23:59 (the sparse, laundering-heavy tail; see section 13). Count them.
 5. Build account IDs (section 4.3) and convert amounts (section 4.4).
 6. **Self-transfers** (sender = receiver): kept in the file, flagged, and **left out of graph features** (they do not move money between accounts). 🔧
 7. Sort by timestamp; assign `txn_id`.
@@ -311,9 +312,13 @@ Fill in as things are confirmed or changed.
 
 | Item | Status | Finding / change | Date |
 |---|---|---|---|
-| IBM column names (2.3) | ⚠️ open | | |
-| IBM full currency list (2.5) | ⚠️ open | | |
-| IBM patterns file format (2.7) | ⚠️ open | | |
+| IBM column names (2.3) | ✅ verified | Exactly as in 2.3 (second `Account` column = receiver). Timestamp format `YYYY/MM/DD HH:MM` (minute precision) | 2026-11-02 |
+| IBM HI-Small size | ✅ verified | 5,078,345 transactions; **5,177** laundering (the paper's table says 3.6K; trust the file). File 476 MB | 2026-11-02 |
+| IBM full currency list (2.5) | ✅ verified | 15: US Dollar, Euro, Swiss Franc, Yuan, Shekel, Rupee, UK Pound, Ruble, Yen, Bitcoin, Canadian Dollar, Australian Dollar, Mexican Peso, Saudi Riyal, Brazil Real | 2026-11-02 |
+| IBM payment formats (2.4) | ✅ verified | Cheque 1.86M, Credit Card 1.32M, ACH 601K, Cash 491K, Reinvestment 481K, Wire 172K, Bitcoin 146K | 2026-11-02 |
+| IBM patterns file format (2.7) | ✅ verified | Blocks of `BEGIN LAUNDERING ATTEMPT - <TYPE>: <detail>` … transaction rows in the same 11-column format … `END LAUNDERING ATTEMPT - <TYPE>`. 370 attempts (BIPARTITE 49, CYCLE 54, FAN-IN 40, FAN-OUT 48, GATHER-SCATTER 51, RANDOM 41, SCATTER-GATHER 44, STACK 43); 3,209 transactions = 62% of all laundering. No attempt ID in the file: number attempts in file order to make `pattern_id` | 2026-11-02 |
+| **IBM date range and tail** | ✅ verified, ⚠️ decision | Main data covers 2022-09-01 to 09-10 (200K–1.1M rows/day; 1 Sep is unusually large). A **tail from 09-11 to 09-18 has only 1,108 rows, of which 655 (59%) are laundering**: a time-based giveaway. **Decision (🔧): drop everything after 2022-09-10 23:59** in cleaning (section 7). Loses 655 laundering transactions (13%); accounts' earlier laundering stays | 2026-11-02 |
+| IBM self-transfers | ✅ verified | 591,347 (11.6% of rows); only 11 are laundering. Handled per section 7 step 6 | 2026-11-02 |
 | IBM licence (2.8) | ⚠️ open | | |
 | SAML-D column names and setting (3) | ⚠️ open | | |
 | SAML-D licence (3) | ⚠️ open | | |

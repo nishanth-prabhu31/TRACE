@@ -1,0 +1,17 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Data and outputs (large or generated; see docs/02-DATA.md section 12)
+data/raw/
+data/processed/
+data/features/
+data/runs/
+models/
+trace.db
+
+# Notebook checkpoints and editor files
+.ipynb_checkpoints/
+.vscode/
+.DS_Store

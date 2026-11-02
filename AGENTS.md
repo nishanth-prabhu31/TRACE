@@ -22,6 +22,7 @@ TRACE: Transaction Risk Analytics and Chain Evaluation. An explainable money-mul
 | Exact file and table formats | `docs/04-CONTRACT.md` |
 | Features, rules, models, scores, explanations, metrics, experiments | `docs/05-FEATURES-MODEL.md` |
 | Screens and interactions | `docs/06-DASHBOARD.md` |
+| Who owns which files and tasks | `WORKSPLIT.md` |
 
 ## 3. Marking progress
 

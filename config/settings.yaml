@@ -1,0 +1,169 @@
+# TRACE settings: every tunable value lives here (docs/03-ARCHITECTURE.md section 6).
+# Change a value here, never in code. Record meaningful changes in the change log of the doc named next to it.
+
+contract_version: 1          # docs/04-CONTRACT.md
+random_seed: 42
+n_seeds: 5                   # docs/05-FEATURES-MODEL.md section 4
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  features: data/features
+  runs: data/runs
+  demo: data/demo
+  fake: data/fake
+  models: models
+  reports: reports
+  db: trace.db
+
+# --- Data (docs/02-DATA.md) -------------------------------------------------
+datasets:
+  ibm_hi_small:
+    raw_dir: data/raw/ibm_hi_small
+    transactions_file: HI-Small_Trans.csv
+    patterns_file: HI-Small_Patterns.txt
+    drop_after: "2022-09-10 23:59:59"   # sparse, laundering-heavy tail (02-DATA section 13)
+  ibm_li_small:
+    raw_dir: data/raw/ibm_li_small
+    transactions_file: LI-Small_Trans.csv
+    patterns_file: LI-Small_Patterns.txt
+    drop_after: null                    # check the tail when downloaded
+  saml_d:
+    raw_dir: data/raw/saml_d
+    transactions_file: null             # set when downloaded
+    patterns_file: null
+
+currency:
+  base: USD
+  # Units of each currency per 1 USD. Derived from cross-currency rows in IBM HI-Small
+  # (median Amount Received / Amount Paid where one side is US Dollar), 2026-11-02.
+  # amount_in_base = amount / units_per_base[currency]
+  units_per_base:
+    US Dollar: 1.0
+    Euro: 0.8534
+    Swiss Franc: 0.915
+    UK Pound: 0.7742
+    Yuan: 6.6976
+    Yen: 105.4
+    Rupee: 73.444
+    Ruble: 77.804
+    Shekel: 3.377
+    Canadian Dollar: 1.3193
+    Australian Dollar: 1.4128
+    Mexican Peso: 21.1431
+    Saudi Riyal: 3.7511
+    Brazil Real: 5.6465
+    Bitcoin: 0.000084219
+  display: INR
+  display_units_per_base: 96.0          # rupees per USD shown in the app; set to the current rate
+
+split:                                  # 02-DATA section 6
+  train: 0.6
+  validation: 0.2
+  test: 0.2
+
+# --- Quality gate (02-DATA section 8) ----------------------------------------
+quality_gate:
+  c1_dropped_rows: {warn: 0.001, fail: 0.01}
+  c2_min_mules: {warn: 100, fail: 30}
+  c3_mules_per_period: {warn: 30, fail: 10}
+  c3_test_new_share: {warn: 0.8, fail: 0.5}
+  c4_single_column_pr_auc: {warn: 0.3, fail: 0.8}
+  c5_single_threshold_f1: {warn: 0.5, fail: 0.8}
+  c6_mules_in_largest_component: {warn: 0.5, fail: 0.25}
+  c7_constant_features: {warn: 0, fail: 3}
+
+# --- Scoring population and training rows (05 sections 1 and 4) --------------
+scoring:
+  snapshot_every_hours: 24
+  active_lookback_hours: 24
+training:
+  negative_keep_share: 1.0              # use 0.2 only if memory is tight, and record it
+
+# --- Features (05 section 2) ------------------------------------------------
+features:
+  windows_hours: [1, 6, 24]
+  pass_through_delta_hours: [1, 24]
+  night_hours: [0, 5]
+  round_amount_divisor: 100
+  chain: {max_gap_hours: 24, min_keep_share: 0.5, hops: 3}
+  cycle: {min_len: 2, max_len: 4, within_hours: 24}
+  betweenness: {enabled: true, cutoff_hops: 3}
+  new_counterparty_hours: 24
+
+# --- Rules (05 section 3) ---------------------------------------------------
+rules:
+  lookback_hours: 24
+  pass_through: {min_in_txns: 2, forward_share: 0.9, within_hours: 1}
+  fan_in: {min_senders: 5, window_hours: 2, forward_share: 0.8, forward_within_hours: 2}
+  fan_out: {min_receivers: 5, window_hours: 2, funded_within_hours: 2}
+  chain: {min_hops: 3, hop_within_hours: 1, min_keep_share: 0.7}
+  cycle: {min_len: 2, max_len: 4, within_hours: 24}
+
+# --- Models (05 section 5) --------------------------------------------------
+model:
+  lightgbm:
+    objective: binary
+    learning_rate: 0.05
+    n_estimators: 1000
+    early_stopping_rounds: 50
+    num_leaves: 31
+    min_child_samples: 20
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    lambda_l1: 0.0
+    lambda_l2: 0.0
+  random_forest:
+    n_estimators: 300
+  optuna:
+    enabled: false
+    n_trials: 50
+
+# --- Scores, verdicts, explanations (05 section 6) ---------------------------
+verdicts:
+  likely_mule_min_precision: 0.5
+  watch_min_recall: 0.8
+  watch_fallback_gap: 10
+explain:
+  top_reasons: 5
+  trail: {max_hops: 3, max_gap_hours: 24, branch: 2, max_trails: 3}
+rings:
+  link_within_hours: 24
+
+# --- Evaluation and experiments (05 sections 7, 8, 11) -----------------------
+metrics:
+  k_values: [50, 100, 500]
+  fpr_top_share: 0.01
+  per_pattern_k: 500
+replay:
+  step_hours: 1
+  heavy_refresh_hours: 6
+feedback_simulation:
+  alerts_per_round: 50
+  rounds: 3
+
+# --- Demo file (02-DATA section 10) -----------------------------------------
+demo:
+  target_accounts: [200, 500]
+  channel_relabel:                      # cosmetic only; the app says "restyled IBM data"
+    Wire: IMPS
+    ACH: NEFT
+    Credit Card: UPI
+    Cheque: Cheque
+    Cash: Cash
+    Reinvestment: Internal transfer
+    Bitcoin: Crypto
+
+# --- App (06-DASHBOARD) -----------------------------------------------------
+app:
+  graph_max_nodes: 40
+  graph_default_hops: 1
+  edge_width_px: [1, 8]
+  breadcrumb_length: 6
+  queue_page_size: 50
+
+analysts:                               # PRD F-17: role picker, not security
+  - {name: "Analyst A", role: ANALYST}
+  - {name: "Analyst B", role: ANALYST}
+  - {name: "Admin", role: ADMIN}

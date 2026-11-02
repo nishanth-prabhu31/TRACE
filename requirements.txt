@@ -1,0 +1,11 @@
+pandas==3.1.0
+numpy==2.4.6
+pyarrow==26.0.0
+networkx==3.6.1
+python-igraph==1.0.0
+lightgbm==4.7.0
+scikit-learn==1.9.1
+shap==0.51.0
+streamlit==1.66.1
+PyYAML==6.0.3
+pytest==9.2.0

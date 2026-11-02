@@ -1,20 +1,22 @@
 # TRACE — Checklist
 
 `[ ]` not started · `[~]` in progress · `[x]` done (add date + initials) · `[!]` blocked (add reason)
-Rules: `AGENTS.md` section 3. Doc refs: `PRD` = 01, `DATA` = 02, `ARCH` = 03, `CON` = 04, `FM` = 05, `DASH` = 06.
+Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dashboard). Doc refs: `PRD` = 01, `DATA` = 02, `ARCH` = 03, `CON` = 04, `FM` = 05, `DASH` = 06.
 
 ## 0. Setup
-- [ ] Repo created with folder layout (ARCH §5), `.gitignore`, `requirements.txt`, README stub
-- [ ] `config/settings.yaml` created with all 🔧 values (ARCH §6); exchange rates set
-- [ ] `trace_aml/contract.py` matches CON v1
-- [ ] `scripts/check_contract.py` works (CON §10)
+- [x] Repo created with folder layout (ARCH §5), `.gitignore`, `requirements.txt`, README stub — 2026-11-02 NP
+- [x] Python venv (`.venv`) with all libraries installed — 2026-11-02 NP
+- [x] `config/settings.yaml` created with all 🔧 values (ARCH §6); exchange rates set (derived from IBM data) — 2026-11-02 NP
+- [x] `trace_aml/contract.py` matches CON v1 — 2026-11-02 NP
+- [x] `scripts/check_contract.py` works (CON §10); tests in `tests/test_contract.py` pass — 2026-11-02 NP
 - [ ] `scripts/make_fake_data.py` writes `data/fake/` that passes the checker (CON §9)
 - [ ] Graph component test: does `streamlit-agraph` return clicked node? Record result in DASH §5.2 (⚠️)
-- [ ] Decide team split (PRD Q1)
+- [x] Decide team split (PRD Q1): A = data + model, B = dashboard; see `WORKSPLIT.md` — 2026-11-02 NP
 
 ## 1. Data
-- [ ] Download IBM HI-Small + LI-Small (+ patterns files) to `data/raw/`
-- [ ] Verify IBM columns, currencies, patterns file format; update DATA §13
+- [x] Download IBM HI-Small (+ patterns file) to `data/raw/` — 2026-11-02 NP
+- [ ] Download IBM LI-Small (+ patterns file); check its date tail
+- [x] Verify IBM columns, currencies, patterns file format; update DATA §13 — 2026-11-02 NP
 - [ ] F-01 Ingest IBM → common format (DATA §4, §7)
 - [ ] F-03 Account labels + rings + `splits.json` (DATA §5, §6)
 - [ ] F-02 Quality gate C1–C7 + report card (DATA §8); IBM HI-Small result: ____
