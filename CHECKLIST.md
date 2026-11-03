@@ -17,7 +17,7 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [x] Download IBM HI-Small (+ patterns file) to `data/raw/` — 2026-11-02 NP
 - [ ] Download IBM LI-Small (+ patterns file); check its date tail
 - [x] Verify IBM columns, currencies, patterns file format; update DATA §13 — 2026-11-02 NP
-- [ ] F-01 Ingest IBM → common format (DATA §4, §7)
+- [x] F-01 Ingest IBM → common format (DATA §4, §7); passes contract checker; 9 tests — 2026-11-03 NP
 - [ ] F-03 Account labels + rings + `splits.json` (DATA §5, §6)
 - [ ] F-02 Quality gate C1–C7 + report card (DATA §8); IBM HI-Small result: ____
 - [ ] Quality gate on LI-Small; result: ____
