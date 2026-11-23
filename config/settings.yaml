@@ -66,8 +66,7 @@ split:                                  # 02-DATA section 6
 quality_gate:
   c1_dropped_rows: {warn: 0.001, fail: 0.01}
   c2_min_mules: {warn: 100, fail: 30}
-  c3_mules_per_period: {warn: 30, fail: 10}
-  c3_test_new_share: {warn: 0.8, fail: 0.5}
+  c3_new_mules_per_period: {warn: 30, fail: 10}
   c4_single_column_pr_auc: {warn: 0.3, fail: 0.8}
   c5_single_threshold_f1: {warn: 0.5, fail: 0.8}
   c6_mules_in_largest_component: {warn: 0.5, fail: 0.25}
