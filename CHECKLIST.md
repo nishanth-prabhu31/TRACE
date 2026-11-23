@@ -35,6 +35,7 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [x] Evaluation report, 5 seeds, HI-Small + LI-Small (FM §7): `reports/eval_v1.md`, `reports/eval_v1_ibm_li_small.md`; LI-Small is much weaker (FM §13) — 2026-11-14 NP
 - [x] Minimum bar met: LightGBM beats RULES and TXN_ONLY on PR-AUC (PRD §9): test PR-AUC 0.165 vs 0.0011 and 0.081 (HI-Small, synthetic, 5 seeds); note Random Forest 0.276 beats LightGBM — 2026-11-14 NP
 - [ ] Numeric targets set from first results; recorded in FM §13
+- [ ] Try the stronger-regularised LightGBM from branch `nishanth-pipeline` (FM §13) on this pipeline; keep only if validation PR-AUC improves
 - [x] Ablations (FM §5.1) — 2026-11-14 NP
 - [~] F-07 Calibration + verdict cut-offs (FM §6.1–6.2): done and tested; WATCH rule gives 23K accounts, needs a team decision (FM §13)
 - [x] F-08 SHAP reasons (FM §6.3) — 2026-11-14 NP
@@ -66,6 +67,7 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [ ] F-13 Rings: pipeline step + screen (ARCH P10, DASH §7)
 - [ ] F-14 Retrain path + model versions + Models screen (ARCH §3.2, DASH §8)
 - [ ] Feedback evaluation with simulated analyst, 3 rounds (FM §11)
+- [ ] F-18 UPI-style stress test: inject fast ₹ mule rings into IBM normal background; compare model vs rules vs model+rules on them (stress test only, never trained on, never the headline result; PRD §5)
 - [ ] **LAYER 2 DONE**
 
 ## 6. Layer 3
@@ -79,6 +81,8 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [ ] Results page or charts for the report (FM §12, DASH §1)
 - [ ] Final report sections drafted from `reports/`
 - [ ] README: what it is, how to run, screenshots, honest limitations
+- [ ] Viva prep sheet: pipeline in 6 lines, likely questions + answers, key numbers; practice round
+- [ ] Detailed project explanation doc: every step from raw data to dashboard, in plain words
 
 ## Parked (only after Layer 2+)
 - [ ] P-01 Own visual design

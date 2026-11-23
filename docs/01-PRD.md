@@ -90,6 +90,7 @@ Work is built in **layers**. Each layer is a complete, demoable project on its o
 |---|---|---|
 | F-12 | Replay and "caught in time" | Replay data in time order and measure how many minutes before cash-out each ring was first flagged |
 | F-13 | Ring view | Group flagged accounts into rings and show each ring as one case ("Ring #3: 6 accounts, ₹12L moved") |
+| F-18 | UPI-style stress test | Inject fast, small-₹ mule rings (hops within minutes) into IBM's normal background; measure whether the IBM-trained model, the rules, and both together catch them. Labelled as a stress test, never trained on. A full UPI generator stays future work and would enter through the same ingest → retrain pipeline |
 | F-14 | Retrain and model versions | Analyst presses "Retrain" when they choose; panel compares v1 / v2 / v3 and allows switching back |
 
 ### Layer 3 (research flex)
