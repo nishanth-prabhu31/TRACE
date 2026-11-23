@@ -8,7 +8,7 @@ data/raw/
 data/processed/
 data/features/
 data/runs/
-models/
+/models/
 trace.db
 
 # Notebook checkpoints and editor files
