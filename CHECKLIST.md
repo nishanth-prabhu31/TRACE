@@ -21,16 +21,17 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [x] F-03 Account labels + rings + `splits.json` (DATA §5, §6); 7 tests — 2026-11-05 NP
 - [ ] Download IBM HI-Medium for final numbers (only 65 new test mules in HI-Small; DATA §13)
 - [x] F-02 Quality gate C1–C7 + report card (DATA §8); IBM HI-Small result: C1–C6 PASS, C7 pending until features exist — 2026-11-05 NP
-- [ ] Rerun quality gate after features exist (fills in C7)
+- [x] Rerun quality gate after features exist: all 7 checks PASS — 2026-11-23 NP
 - [ ] Quality gate on LI-Small; result: ____
 
 ## 2. Model (Core)
-- [ ] F-04 Features: structural (FM §2.1)
+- [x] F-04 Features: structural (FM §2.1); 12 features, ~45 s per snapshot incl. betweenness — 2026-11-23 NP
 - [x] F-04 Features: temporal (FM §2.2); feature framework, catalogue, cut-off leakage test — 2026-11-05 NP
-- [ ] F-04 Features: fund-flow incl. FIFO matching (FM §2.3)
+- [x] F-04 Features: fund-flow incl. FIFO matching (FM §2.3); 41 features total, ~65 s per snapshot — 2026-11-23 NP
+- [x] Run all daily snapshots (`--all`, 10 files, 16.5 min), then rerun quality gate for C7 — 2026-11-23 NP
 - [x] F-04 Features: relative amounts (FM §2.4) — 2026-11-05 NP
 - [ ] Leakage tests pass (ARCH §9)
-- [ ] F-05 Rule detectors + evidence + rules-only score (FM §3)
+- [x] F-05 Rule detectors + evidence + rules-only score (FM §3); run on all 10 snapshots; best rule (CYCLE) only 10% precision — 2026-11-23 NP
 - [ ] Training rows / snapshots (FM §4)
 - [ ] F-06 Baselines: RULES, TXN_ONLY, LOGREG, RANDOM_FOREST, ISOLATION_FOREST (FM §5)
 - [ ] F-06 LightGBM main model (FM §5)
@@ -68,6 +69,7 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [ ] F-13 Rings: pipeline step + screen (ARCH P10, DASH §7)
 - [ ] F-14 Retrain path + model versions + Models screen (ARCH §3.2, DASH §8)
 - [ ] Feedback evaluation with simulated analyst, 3 rounds (FM §11)
+- [ ] F-18 UPI-style stress test: inject fast ₹ mule rings into IBM normal background; compare model vs rules vs model+rules on them (stress test only, never trained on, never the headline result)
 - [ ] **LAYER 2 DONE**
 
 ## 6. Layer 3
@@ -81,6 +83,8 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [ ] Results page or charts for the report (FM §12, DASH §1)
 - [ ] Final report sections drafted from `reports/`
 - [ ] README: what it is, how to run, screenshots, honest limitations
+- [ ] Viva prep sheet: pipeline in 6 lines, likely questions + answers, key numbers; practice round
+- [ ] Detailed project explanation doc: every step from raw data to dashboard, in plain words, to recollect the small steps
 
 ## Parked (only after Layer 2+)
 - [ ] P-01 Own visual design

@@ -15,7 +15,8 @@ def account_events(transactions: pd.DataFrame, cutoff: pd.Timestamp,
     amount_original, channel, is_self.
     """
     txns = transactions[transactions["timestamp"] <= cutoff]
-    keep = ["timestamp", "amount", "amount_original", "channel", "is_self"]
+    keep = [c for c in ("txn_id", "timestamp", "amount", "amount_original", "channel", "is_self")
+            if c in txns.columns]
     out = txns[keep].assign(account_id=txns["sender_id"], counterparty=txns["receiver_id"], direction="OUT")
     inc = txns[keep].assign(account_id=txns["receiver_id"], counterparty=txns["sender_id"], direction="IN")
     events = pd.concat([out, inc], ignore_index=True)

@@ -1,6 +1,6 @@
 {
   "dataset": "ibm_hi_small",
-  "overall": "WARN",
+  "overall": "PASS",
   "checks": [
     {
       "id": "C1",
@@ -47,9 +47,9 @@
     {
       "id": "C7",
       "name": "Compatibility",
-      "status": "WARN",
-      "value": null,
-      "detail": "not checked yet: no feature files exist (run again after the feature step)"
+      "status": "PASS",
+      "value": 0,
+      "detail": "41 features in 20220911T0000.parquet; constant or empty: none"
     }
   ]
 }

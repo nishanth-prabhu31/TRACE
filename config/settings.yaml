@@ -86,6 +86,7 @@ features:
   night_hours: [0, 5]
   round_amount_divisor: 100
   chain: {max_gap_hours: 24, min_keep_share: 0.5, hops: 3}
+  chain_window_hours: 48        # chains and cycles are counted in the last 48 h only (keeps it fast)
   cycle: {min_len: 2, max_len: 4, within_hours: 24}
   betweenness: {enabled: true, cutoff_hops: 3}
   new_counterparty_hours: 24
@@ -102,17 +103,20 @@ rules:
 # --- Models (05 section 5) --------------------------------------------------
 model:
   lightgbm:
+    # v1 settings, chosen on validation PR-AUC (05-FEATURES-MODEL.md section 13). The first
+    # settings (lr 0.05, 31 leaves, 20 per leaf, class weight ~1133, early stopping) overfit after ~8 trees.
     objective: binary
-    learning_rate: 0.05
-    n_estimators: 1000
-    early_stopping_rounds: 50
-    num_leaves: 31
-    min_child_samples: 20
-    feature_fraction: 0.8
-    bagging_fraction: 0.8
+    learning_rate: 0.03
+    n_estimators: 400
+    early_stopping_rounds: null     # fixed number of trees; row-level early stopping was too noisy
+    num_leaves: 15
+    min_child_samples: 200
+    feature_fraction: 0.5
+    bagging_fraction: 0.5
     bagging_freq: 1
     lambda_l1: 0.0
-    lambda_l2: 0.0
+    lambda_l2: 10.0
+    scale_pos_weight: 1.0           # no class weight: extreme weights made it memorise the few mules
   random_forest:
     n_estimators: 300
   optuna:

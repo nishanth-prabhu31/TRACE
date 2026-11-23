@@ -69,6 +69,43 @@ def test_relative_amounts():
     assert f.loc["A", "round_amount_share"] == 0.75  # 100, 100, 1000 are multiples of 100; 1150 is not
 
 
+def test_structural_basics():
+    f = features()
+    assert f.loc["A", "in_degree"] == 3   # B, C, E
+    assert f.loc["A", "out_degree"] == 1  # D
+    assert f.loc["A", "counterparties"] == 4
+    assert f.loc["A", "pagerank"] > f.loc["C", "pagerank"]  # A receives from many
+    assert f.loc["A", "nbr_new_share"] == 0.75  # C, E, D first seen in the last 24 h; B is older
+    assert 0 <= f.loc["A", "community_internal_flow"] <= 1
+
+
+def test_fifo_pass_through_and_holding():
+    f = features()
+    # A receives 100 (Sep 1 10:00), 100 (23:10), 1000 (23:30), sends 1150 at 23:50.
+    # Oldest first: 100 held 2,270 min (~38 h), 100 held 40 min, 950 held 20 min.
+    assert abs(f.loc["A", "pass_through_1h"] - 1050 / 1200) < 1e-4
+    assert abs(f.loc["A", "pass_through_24h"] - 1050 / 1200) < 1e-4  # the 38 h piece is too slow for 24 h too
+    assert f.loc["A", "holding_median_min"] == 40
+    assert abs(f.loc["A", "net_flow_ratio"] - (1200 - 1150) / 2350) < 1e-4
+    assert f.loc["A", "fan_in_max_1h"] == 2  # C and E in the 23:00 hour
+
+
+def test_chains_and_cycles():
+    from trace_aml.features.flow import chains_and_cycles
+    rows = [("P", "Q", "2022-09-02 10:00", 100.0),   # chain P -> Q -> R -> S
+            ("Q", "R", "2022-09-02 10:30", 95.0),
+            ("R", "S", "2022-09-02 11:00", 90.0),
+            ("U", "V", "2022-09-02 12:00", 50.0),    # round trip U -> V -> U
+            ("V", "U", "2022-09-02 13:00", 49.0)]
+    df = pd.DataFrame(rows, columns=["sender_id", "receiver_id", "timestamp", "amount"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["txn_id"] = range(len(df))
+    df["is_self"] = False
+    out = chains_and_cycles(df, CUTOFF, window_hours=48, max_gap_hours=24, min_keep_share=0.5)
+    assert out.loc["Q", "chain_count"] == 1  # Q is the middle of P -> Q -> R -> S
+    assert out.loc["V", "cycle_count"] == 1
+
+
 def test_inactive_account_not_scored():
     f = features()
     assert "B" not in f.index  # B's only transaction was 37 h before the cut-off

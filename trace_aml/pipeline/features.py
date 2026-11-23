@@ -17,7 +17,9 @@ import pandas as pd
 
 from trace_aml.config import load_settings, path
 from trace_aml.features.events import account_events, active_accounts
+from trace_aml.features.flow import flow_features
 from trace_aml.features.relative import relative_features
+from trace_aml.features.structural import structural_features
 from trace_aml.features.temporal import temporal_features
 from trace_aml.pipeline.common import now_utc, write_manifest
 
@@ -36,6 +38,10 @@ def compute_features(transactions: pd.DataFrame, cutoff: pd.Timestamp, settings:
         temporal_features(events, cutoff, feats["windows_hours"], tuple(feats["night_hours"]),
                           feats["new_counterparty_hours"]),
         relative_features(events, amounts, feats["round_amount_divisor"]),
+        structural_features(transactions, cutoff, accounts,
+                            feats["betweenness"]["cutoff_hops"] if feats["betweenness"]["enabled"] else None,
+                            feats["new_counterparty_hours"], settings["random_seed"]),
+        flow_features(events, transactions, cutoff, settings),
     ]
     table = pd.concat(families, axis=1).reindex(accounts)
     table.insert(0, "cutoff", cutoff)
