@@ -18,15 +18,17 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [ ] Download IBM LI-Small (+ patterns file); check its date tail
 - [x] Verify IBM columns, currencies, patterns file format; update DATA §13 — 2026-11-02 NP
 - [x] F-01 Ingest IBM → common format (DATA §4, §7); passes contract checker; 9 tests — 2026-11-03 NP
-- [ ] F-03 Account labels + rings + `splits.json` (DATA §5, §6)
-- [ ] F-02 Quality gate C1–C7 + report card (DATA §8); IBM HI-Small result: ____
+- [x] F-03 Account labels + rings + `splits.json` (DATA §5, §6); 7 tests — 2026-11-05 NP
+- [ ] Download IBM HI-Medium for final numbers (only 65 new test mules in HI-Small; DATA §13)
+- [x] F-02 Quality gate C1–C7 + report card (DATA §8); IBM HI-Small result: C1–C6 PASS, C7 pending until features exist — 2026-11-05 NP
+- [ ] Rerun quality gate after features exist (fills in C7)
 - [ ] Quality gate on LI-Small; result: ____
 
 ## 2. Model (Core)
 - [ ] F-04 Features: structural (FM §2.1)
-- [ ] F-04 Features: temporal (FM §2.2)
+- [x] F-04 Features: temporal (FM §2.2); feature framework, catalogue, cut-off leakage test — 2026-11-05 NP
 - [ ] F-04 Features: fund-flow incl. FIFO matching (FM §2.3)
-- [ ] F-04 Features: relative amounts (FM §2.4)
+- [x] F-04 Features: relative amounts (FM §2.4) — 2026-11-05 NP
 - [ ] Leakage tests pass (ARCH §9)
 - [ ] F-05 Rule detectors + evidence + rules-only score (FM §3)
 - [ ] Training rows / snapshots (FM §4)
