@@ -180,7 +180,7 @@ Every dataset (IBM, SAML-D, backups, demo file) is converted to **one common for
 The source data labels **transactions**. TRACE scores **accounts**. This section is the one rule that turns one into the other. It must be applied identically to every dataset.
 
 ### 5.1 Roles
-For each account, look at its laundering transactions:
+For each account, look at its laundering transactions **up to a given time** (section 5.5). Laundering self-transfers are ignored: they move no money between accounts.
 
 | Role | Rule | Used as |
 |---|---|---|
@@ -192,7 +192,7 @@ For each account, look at its laundering transactions:
 **Why mules = "both in and out":** a mule is by definition a pass-through account. Sources and sinks are a different job (the fraudster's or the cash-out), and labelling them as "normal" would teach the model wrong behaviour, while labelling them "mule" would blur the target. So they are set aside. 🔧 Revisit only if the quality gate shows too few mules.
 
 ### 5.2 When an account became a mule
-`mule_since` = time of the account's **first** laundering transaction (in or out). Used by the time split (section 6) and the replay test (F-12).
+`mule_since` = the moment the account has **both** received and sent laundering money, i.e. the later of its first laundering transaction in and its first laundering transaction out. Empty for every other role. Used by the time split (section 6) and the replay test (F-12).
 
 ### 5.3 Rings
 - **Primary:** from the patterns file. All accounts in the same pattern group share a `ring_id`.
@@ -200,7 +200,19 @@ For each account, look at its laundering transactions:
 - Every reported number that uses rings says which definition was used.
 
 ### 5.4 Account labels file
-One row per account: `account_id`, `role`, `is_mule` (1 / 0 / empty for excluded), `mule_since`, `ring_id`. Format in `04-CONTRACT.md`.
+One row per account: `account_id`, `role`, `is_mule` (1 / 0 / empty for excluded), `mule_since`, `ring_id`, plus `first_laundering_in` and `first_laundering_out`. The role columns are as of the **end of the data**; the two time columns let any code work out the role as of an earlier time. Format in `04-CONTRACT.md`.
+
+### 5.5 Labels are "as of" a time (no future knowledge)
+A role is always worked out from laundering transactions **up to a stated time** and nothing later:
+
+| Used for | Roles as of |
+|---|---|
+| Training rows | End of the **train** period |
+| Validation positives, cut-offs, calibration | End of the **validation** period |
+| Test numbers | End of the **test** period (end of the data) |
+
+**Why:** an account that receives dirty money on day 3 and first forwards it on day 9 is not yet a mule by our own rule on day 3. Calling it one in training would use test-period information. At the end of the train period it is a SINK (excluded); in the test period it is a new mule.
+One function does this everywhere: `labels_as_of(account_labels, time)` in `trace_aml/pipeline/labels.py`.
 
 ## 6. Time split
 
@@ -214,7 +226,7 @@ One row per account: `account_id`, `role`, `is_mule` (1 / 0 / empty for excluded
 
 Rules that come with it:
 1. **Features at a cut-off use only transactions up to that cut-off.** An account scored at the end of the train period cannot see anything that happened later.
-2. **An account's label in a period** = whether it was a mule *by the end of that period* (using `mule_since`).
+2. **An account's label in a period** = its role as of the end of that period (section 5.5), so labels never use later transactions.
 3. **Test mules must be new:** the main test numbers count only mules whose `mule_since` falls **inside the test period**. Mules that started earlier (in train **or** validation) are "known" mules and are reported separately. The same rule applied to the validation period defines validation positives.
 4. The split is by **timestamp**, cut at whole hours.
 5. With HI-Small's 10 days, 60/20/20 ≈ 6 / 2 / 2 days. If the quality gate shows a period has too few mules, adjust the shares and record why in section 13.
@@ -240,11 +252,21 @@ A script that runs on **any** dataset in the common format and writes a **report
 |---|---|---|---|---|---|
 | C1 | **Format** | Required columns, parsed timestamps, positive amounts, duplicates | All present; < 0.1% rows dropped | 0.1–1% dropped | Column missing, or > 1% dropped |
 | C2 | **Labels** | Count of mule / source / sink / normal accounts | ≥ 100 mules | 30–99 | < 30 |
-| C3 | **Time spread** | **New** mules per period (first laundering inside the period); share of new vs known in test is reported only | ≥ 30 new mules in each period | 10–29 in a period | < 10 in a period |
+| C3 | **Time spread** | Mules per period; share of test mules not seen in train | ≥ 30 mules in each period and ≥ 80% of test mules new | 10–29 in a period, or 50–80% new | < 10 in a period, or < 50% new |
 | C4 | **Giveaway test** | Train a tiny model on **one column at a time** (amount, channel, currency, hour of day, bank); PR-AUC of each | Every single column < 0.3 | Any column 0.3–0.8 | Any column ≥ 0.8 |
 | C5 | **Overlap** | Best possible F1 from **one threshold** on one simple stat (in-degree, out-degree, total amount) | All < 0.5 | Any 0.5–0.8 | Any ≥ 0.8 |
 | C6 | **Graph sanity** | Share of mules inside the largest connected part; whether normal accounts also have high degree | ≥ 50% of mules in the largest part and normal hubs exist | 25–50% | < 25%, or no normal hubs |
 | C7 | **Compatibility** | Every TRACE feature can be computed (no column all-empty or constant) | All features computable | Up to 3 features constant | More than 3 constant, or any missing |
+
+**Which period each check may look at:** C4, C5 and C6 compare data with labels, so they use only the **train and validation** periods (labels as of the end of the period used, section 5.5). The test period is not opened by them. C2 and C3 only count mules.
+
+**The "tiny model" in C4:** for one column, the laundering (or mule) rate of each value in the train period; numbers are first cut into 50 bins 🔧. It is fitted on the train period and its PR-AUC is measured on the validation period.
+
+**C3 "new" share:** of the mules with any transaction in the test period, the share that were not yet mules at the end of the train period.
+
+**C6 "normal hubs exist":** at least one NORMAL account among the 100 🔧 best-connected accounts.
+
+**C7** reads the saved feature files, so it shows ⚠️ "not checked yet" until P4 has run; rerun the gate after P4.
 
 **How C4 is run:** transaction-level columns (amount, channel, currency, hour of day, bank) are tested at **transaction level** against `is_laundering`; the same columns aggregated per account (e.g. most-used channel) are tested at **account level** against `is_mule`. Both results are reported.
 
@@ -320,10 +342,15 @@ Fill in as things are confirmed or changed.
 | **IBM date range and tail** | ✅ verified, ⚠️ decision | Main data covers 2022-09-01 to 09-10 (200K–1.1M rows/day; 1 Sep is unusually large). A **tail from 09-11 to 09-18 has only 1,108 rows, of which 655 (59%) are laundering**: a time-based giveaway. **Decision (🔧): drop everything after 2022-09-10 23:59** in cleaning (section 7). Loses 655 laundering transactions (13%); accounts' earlier laundering stays | 2026-11-02 |
 | First ingest run (P1) | ✅ done | 5,077,228 rows written, 4,522 laundering, 515,078 accounts, 2022-09-01 00:00 to 09-10 23:59. Dropped: 9 exact duplicates, 1,108 tail rows. Every pattern row in the main period (2,554) matched a transaction | 2026-11-03 |
 | **Tail = ends of laundering attempts** | ✅ verified, ⚠️ affects F-12 | All 655 laundering rows in the dropped tail are pattern rows. Of 370 attempts: 261 fully inside the main period, **102 cut short by the tail** (their last hops are gone), 7 entirely in the tail. For F-12 (caught in time), use only the 261 complete attempts as ground truth for cash-out time, or the cut attempts' cash-out will look earlier than it really was | 2026-11-03 |
-| First labels run (P3) | ✅ done | Roles: 795 MULE, 2,241 SOURCE, 2,826 SINK, 509,216 NORMAL. Rings: 259 from patterns, 1,270 connected; 27 laundering accounts with no ring; largest ring 241 accounts (connected rings can be big because the laundering tag carries forward). Split: train to 09-07, validation to 09-09, test to 09-11 | 2026-11-05 |
-| **New mules per period** | ✅ verified, decided | Train 520, validation 210, **test only 65 new**; 602 already-known mules are still active in test (new share 9.7%). 65 positives is thin: Precision@100 cannot exceed 0.65 and PR-AUC will be noisy. **Decision: build and debug everything on HI-Small; produce the final reported numbers on HI-Medium** (16 days, more new mules in test) | 2026-11-05 |
-| C3 rule changed | 🔧 changed | The "≥ 80% of test mules new" condition always fails on IBM because known mules stay active, and known mules are excluded from the main metrics anyway. **C3 now checks only that each period has enough new mules**; the new share is still reported | 2026-11-05 |
-| IBM self-transfers | ✅ verified | 591,347 (11.6% of rows); only 11 are laundering. Handled per section 7 step 6 | 2026-11-02 |
+| IBM self-transfers | ✅ verified | 591,347 in the raw file (590,819 after cleaning; 11.6% of rows); only 11 are laundering (8 after cleaning). Handled per section 7 step 6 | 2026-11-02 |
+| **As-of labels** (5.1, 5.2, 5.5, 6) | 🔧 decision | Roles are computed only from laundering up to the end of the period they are used for; `mule_since` is now the moment both in and out laundering have happened (was: first laundering transaction). Reason: the old rule let training labels use test-period transactions. Laundering self-transfers are ignored for roles. Contract bumped to version 2 | 2026-11-14 |
+| Ring ID when an account is in several pattern groups (5.3) | 🔧 decision | The account gets the group it appears in first. Connected-fallback rings are numbered `C-0001`…, pattern rings keep the `P-xxxx` pattern ID | 2026-11-14 |
+| Quality gate details (8) | 🔧 decision | C4/C5/C6 use train + validation only; C4 model = per-value rate table fitted on train, scored on validation; C3 and C6 definitions written down | 2026-11-14 |
+| First labels run, HI-Small (P3) | ✅ done | 515,078 accounts: **795 mules**, 2,241 sources, 2,826 sinks, 509,216 normal. Split 60/20/20: train ends 09-07 00:00, validation 09-09 00:00, test 09-11 00:00. Mules: 340 by end of train, 253 new in validation, 202 new in test. Rings: 259 from the patterns file, 4 by the connected fallback. 8 laundering self-transfers ignored | 2026-11-14 |
+| **Quality gate, HI-Small** (8) | ✅ PASS with 2 ⚠️ | C1 pass (9 rows dropped). C2 pass (795 mules). C3 ⚠️: enough mules in every period, but only 60% of the 667 mules active in the test period are new since train (threshold 80%); not a blocker because the main test numbers count new mules only. C4 pass: best one-column PR-AUC 0.008 (channel, per transaction); no giveaway column. C5 pass: best one-threshold F1 0.017. C6 pass: 100% of mules in the largest connected part; 80 of the 100 best-connected accounts are normal. C7 ⚠️ pending P4. Split shares kept at 60/20/20 | 2026-11-14 |
+| LI-Small verified on download | ✅ verified | 6,924,049 rows, 3,565 laundering, same 11 columns, 15 currencies and 7 formats. 117 pattern attempts. **Same tail as HI-Small**: 09-11 to 09-17 has 223 rows, 134 (60%) laundering. Same decision: drop after 2022-09-10 23:59. After cleaning: 6,923,818 rows, 3,431 laundering, 705,905 accounts | 2026-11-14 |
+| Labels and quality gate, LI-Small | ✅ PASS with 2 ⚠️ | **323 mules** (141 by end of train, 91 new in validation, 91 new in test), 1,988 sources, 2,883 sinks. C3 ⚠️ 58% new; C4 best 0.004; C5 best 0.010; C6 100%; C7 pending P4. With 91 test positives, LI-Small numbers will be noisy: report with uncertainty | 2026-11-14 |
+| Quality gate C7 after P4 | ✅ pass | HI-Small and LI-Small: 41 features in 10 snapshot files each, none constant, none empty. Overall stays ⚠️ only because of C3 | 2026-11-14 |
 | IBM licence (2.8) | ⚠️ open | | |
 | SAML-D column names and setting (3) | ⚠️ open | | |
 | SAML-D licence (3) | ⚠️ open | | |

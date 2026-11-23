@@ -1,7 +1,11 @@
-"""P3 Labels and time split: turn transaction labels into account labels (F-03).
+"""P3 Labels and split: account roles, rings and the time split (F-03).
 
-Writes data/processed/<dataset>/account_labels.parquet and splits.json,
-following docs/02-DATA.md sections 5 and 6.
+Reads data/processed/<dataset>/transactions.parquet and labels_txn.parquet, writes
+account_labels.parquet and splits.json next to them (docs/02-DATA.md sections 5-6).
+
+Roles are "as of" a time: only laundering transactions up to that time count, so a
+training label never uses what happens later (docs/02-DATA.md section 5.5).
+This module is labelling code; feature code must never import it.
 
 Usage:
     python -m trace_aml.pipeline.labels --dataset ibm_hi_small
@@ -14,171 +18,180 @@ from pathlib import Path
 import networkx as nx
 import pandas as pd
 
+from trace_aml import contract as c
 from trace_aml.config import load_settings, path
-from trace_aml.pipeline.common import now_utc, write_manifest
+from trace_aml.pipeline.common import file_info, now_utc, write_manifest
+from trace_aml.pipeline.split import compute_split
+
+TIME_COLUMNS = ["first_laundering_in", "first_laundering_out"]
 
 
-def account_roles(transactions: pd.DataFrame, labels: pd.DataFrame) -> pd.DataFrame:
-    """One row per account with role, is_mule and mule_since (docs/02-DATA.md 5.1-5.2).
+def laundering_edges(transactions: pd.DataFrame, labels_txn: pd.DataFrame) -> pd.DataFrame:
+    """Laundering transfers between two different accounts, with their pattern group."""
+    merged = transactions[["txn_id", "timestamp", "sender_id", "receiver_id", "is_self"]].merge(
+        labels_txn, on="txn_id", how="inner", validate="one_to_one")
+    keep = (merged["is_laundering"] == 1) & ~merged["is_self"]
+    return merged.loc[keep].drop(columns=["is_self", "is_laundering"]).reset_index(drop=True)
 
-    Self-transfers are ignored: money sent to yourself is not passing it on.
+
+def first_laundering_times(all_accounts: pd.Series, edges: pd.DataFrame) -> pd.DataFrame:
+    """Per account: when it first received and first sent laundering money (empty if never)."""
+    first_in = edges.groupby("receiver_id")["timestamp"].min()
+    first_out = edges.groupby("sender_id")["timestamp"].min()
+    times = pd.DataFrame({"account_id": all_accounts.astype("string")})
+    times["first_laundering_in"] = times["account_id"].map(first_in).astype("datetime64[ns]")
+    times["first_laundering_out"] = times["account_id"].map(first_out).astype("datetime64[ns]")
+    return times
+
+
+def labels_as_of(account_labels: pd.DataFrame, as_of: pd.Timestamp) -> pd.DataFrame:
+    """Roles using only laundering transactions with timestamp <= as_of.
+
+    Returns account_id, role, is_mule and mule_since. MULE = has both received and
+    sent laundering by then; mule_since = the moment both became true.
     """
-    accounts = pd.Index(pd.concat([transactions["sender_id"], transactions["receiver_id"]]).unique())
-    dirty = transactions.merge(labels[["txn_id", "is_laundering"]], on="txn_id")
-    dirty = dirty[(dirty["is_laundering"] == 1) & ~dirty["is_self"]]
+    got_in = account_labels["first_laundering_in"] <= as_of
+    sent_out = account_labels["first_laundering_out"] <= as_of
+    role = pd.Series("NORMAL", index=account_labels.index, dtype="string")
+    role[got_in & ~sent_out] = "SINK"
+    role[~got_in & sent_out] = "SOURCE"
+    role[got_in & sent_out] = "MULE"
 
-    sent = dirty.groupby("sender_id").size()
-    received = dirty.groupby("receiver_id").size()
-    first_out = dirty.groupby("sender_id")["timestamp"].min()
-    first_in = dirty.groupby("receiver_id")["timestamp"].min()
+    is_mule = pd.Series(pd.NA, index=account_labels.index, dtype="Int8")
+    is_mule[role == "MULE"] = 1
+    is_mule[role == "NORMAL"] = 0
 
-    out = pd.DataFrame(index=accounts)
-    has_out = out.index.isin(sent.index)
-    has_in = out.index.isin(received.index)
-    out["role"] = "NORMAL"
-    out.loc[has_in & has_out, "role"] = "MULE"
-    out.loc[has_out & ~has_in, "role"] = "SOURCE"
-    out.loc[has_in & ~has_out, "role"] = "SINK"
-
-    out["is_mule"] = pd.Series(pd.NA, index=out.index, dtype="Int8")
-    out.loc[out["role"] == "MULE", "is_mule"] = 1
-    out.loc[out["role"] == "NORMAL", "is_mule"] = 0
-
-    since = pd.concat([first_out, first_in], axis=1).min(axis=1)
-    out["mule_since"] = since.reindex(out.index)
-    out.loc[out["role"] == "NORMAL", "mule_since"] = pd.NaT
-    out.index.name = "account_id"
-    return out.reset_index()
+    both = account_labels[TIME_COLUMNS].max(axis=1)
+    mule_since = both.where(role == "MULE").astype("datetime64[ns]")
+    return pd.DataFrame({
+        "account_id": account_labels["account_id"],
+        "role": role,
+        "is_mule": is_mule,
+        "mule_since": mule_since,
+    })
 
 
-def assign_rings(roles: pd.DataFrame, transactions: pd.DataFrame, labels: pd.DataFrame) -> pd.DataFrame:
-    """Add ring_id and ring_source (docs/02-DATA.md 5.3).
+def pattern_rings(edges: pd.DataFrame) -> pd.Series:
+    """account_id -> pattern_id, for every account in a pattern group.
 
-    1. Pattern rings: accounts in the same pattern attempt share its pattern_id.
-       An account in several attempts takes its earliest one.
-    2. Connected rings: remaining laundering accounts linked by laundering transfers
-       form groups C-0001, C-0002, ...; a lone account gets no ring.
+    An account in several groups gets the one it appears in first.
     """
-    roles = roles.copy()
-    dirty = transactions.merge(labels, on="txn_id")
-    dirty = dirty[(dirty["is_laundering"] == 1) & ~dirty["is_self"]]
-
-    in_pattern = dirty[dirty["pattern_id"].notna()]
-    members = pd.concat([
-        in_pattern[["sender_id", "pattern_id", "timestamp"]].rename(columns={"sender_id": "account_id"}),
-        in_pattern[["receiver_id", "pattern_id", "timestamp"]].rename(columns={"receiver_id": "account_id"}),
+    in_pattern = edges[edges["pattern_id"].notna()]
+    long = pd.concat([
+        in_pattern[["sender_id", "timestamp", "pattern_id"]].rename(columns={"sender_id": "account_id"}),
+        in_pattern[["receiver_id", "timestamp", "pattern_id"]].rename(columns={"receiver_id": "account_id"}),
     ])
-    first_attempt = (members.sort_values(["timestamp", "pattern_id"])
-                     .drop_duplicates("account_id")
-                     .set_index("account_id")["pattern_id"])
+    long = long.sort_values(["timestamp", "pattern_id"], kind="stable")
+    return long.drop_duplicates("account_id").set_index("account_id")["pattern_id"]
 
-    ring_id = roles["account_id"].map(first_attempt)
-    ring_source = pd.Series(pd.NA, index=roles.index, dtype="string")
-    ring_source[ring_id.notna()] = "PATTERN_FILE"
 
-    laundering_accounts = set(roles.loc[roles["role"] != "NORMAL", "account_id"])
-    without_ring = laundering_accounts - set(first_attempt.index)
-    edges = dirty[dirty["sender_id"].isin(without_ring) & dirty["receiver_id"].isin(without_ring)]
+def connected_rings(edges: pd.DataFrame, mules: set[str], already_in_ring: set[str]) -> pd.Series:
+    """account_id -> ring id for mules outside any pattern group (fallback rule).
+
+    Mules that sent laundering money to each other are linked; each linked group of
+    two or more is a ring, numbered C-0001, C-0002, ... by its earliest account ID.
+    """
+    candidates = mules - already_in_ring
+    between = edges[edges["sender_id"].isin(candidates) & edges["receiver_id"].isin(candidates)]
     graph = nx.Graph()
-    graph.add_edges_from(zip(edges["sender_id"], edges["receiver_id"]))
-    groups = sorted((sorted(g) for g in nx.connected_components(graph) if len(g) >= 2),
-                    key=lambda g: g[0])
-    connected = {account: f"C-{i:04d}" for i, group in enumerate(groups, start=1) for account in group}
-
-    fill = roles["account_id"].map(connected)
-    use_connected = ring_id.isna() & fill.notna()
-    ring_id[use_connected] = fill[use_connected]
-    ring_source[use_connected] = "CONNECTED"
-
-    roles["ring_id"] = ring_id.astype("string")
-    roles["ring_source"] = ring_source
-    return roles
+    graph.add_edges_from(zip(between["sender_id"], between["receiver_id"]))
+    groups = sorted((sorted(group) for group in nx.connected_components(graph) if len(group) >= 2),
+                    key=lambda group: group[0])
+    ring_of = {account: f"C-{number:04d}" for number, group in enumerate(groups, start=1)
+               for account in group}
+    return pd.Series(ring_of, dtype="string")
 
 
-def time_split(transactions: pd.DataFrame, shares: dict[str, float]) -> dict[str, pd.Timestamp]:
-    """Cut the timeline into train / validation / test at whole hours (docs/02-DATA.md 6)."""
-    start = transactions["timestamp"].min().floor("h")
-    end = transactions["timestamp"].max().floor("h") + pd.Timedelta(hours=1)
-    hours = (end - start) / pd.Timedelta(hours=1)
-    train_end = start + pd.Timedelta(hours=round(hours * shares["train"]))
-    validation_end = start + pd.Timedelta(hours=round(hours * (shares["train"] + shares["validation"])))
-    return {"data_start": start, "train_end": train_end, "validation_end": validation_end, "test_end": end}
+def build_account_labels(transactions: pd.DataFrame, labels_txn: pd.DataFrame) -> pd.DataFrame:
+    """One row per account in the contract format, with roles as of the end of the data."""
+    all_accounts = pd.Series(pd.concat([transactions["sender_id"], transactions["receiver_id"]]).unique())
+    all_accounts = all_accounts.sort_values(ignore_index=True)
+    edges = laundering_edges(transactions, labels_txn)
+
+    out = first_laundering_times(all_accounts, edges)
+    final = labels_as_of(out, transactions["timestamp"].max())
+    out[["role", "is_mule", "mule_since"]] = final[["role", "is_mule", "mule_since"]]
+
+    by_pattern = pattern_rings(edges)
+    mules = set(out.loc[out["role"] == "MULE", "account_id"])
+    by_link = connected_rings(edges, mules, set(by_pattern.index))
+    from_pattern = out["account_id"].map(by_pattern)
+    from_link = out["account_id"].map(by_link)
+    out["ring_id"] = from_pattern.fillna(from_link).astype("string")
+    out["ring_source"] = pd.Series(pd.NA, index=out.index, dtype="string")
+    out.loc[from_pattern.notna(), "ring_source"] = "PATTERN_FILE"
+    out.loc[from_pattern.isna() & from_link.notna(), "ring_source"] = "CONNECTED"
+
+    return out[[col.name for col in c.ACCOUNT_LABELS.columns]]
 
 
-def mule_counts(roles: pd.DataFrame, transactions: pd.DataFrame, cuts: dict) -> dict:
-    """How many mules each period has; "new" = first laundering inside that period."""
-    mules = roles[roles["role"] == "MULE"]
-    since = mules["mule_since"]
-    in_test = transactions["timestamp"] >= cuts["validation_end"]
-    active_in_test = set(transactions.loc[in_test, "sender_id"]) | set(transactions.loc[in_test, "receiver_id"])
-    test_new = int((since >= cuts["validation_end"]).sum())
-    test_known = int(((since < cuts["validation_end"]) & mules["account_id"].isin(active_in_test)).sum())
+def count_mules(account_labels: pd.DataFrame, split: dict[str, pd.Timestamp]) -> dict[str, int]:
+    """Mules per period, each counted with what is known at that period's end."""
+    at_train = labels_as_of(account_labels, split["train_end"])
+    at_validation = labels_as_of(account_labels, split["validation_end"])
+    at_test = labels_as_of(account_labels, split["test_end"])
     return {
-        "train": int((since < cuts["train_end"]).sum()),
-        "validation": int(((since >= cuts["train_end"]) & (since < cuts["validation_end"])).sum()),
-        "test_new": test_new,
-        "test_known": test_known,
-        "test_new_share": round(test_new / (test_new + test_known), 3) if test_new + test_known else None,
+        "train": int((at_train["role"] == "MULE").sum()),
+        "validation": int((at_validation["mule_since"] > split["train_end"]).sum()),
+        "test_new": int((at_test["mule_since"] > split["validation_end"]).sum()),
+        "test_known": int((at_test["mule_since"] <= split["validation_end"]).sum()),
     }
 
 
-def to_contract(roles: pd.DataFrame) -> pd.DataFrame:
-    """Columns and types exactly as docs/04-CONTRACT.md section 2.3."""
-    return pd.DataFrame({
-        "account_id": roles["account_id"].astype("string"),
-        "role": roles["role"].astype("string"),
-        "is_mule": roles["is_mule"].astype("Int8"),
-        "mule_since": pd.to_datetime(roles["mule_since"]).astype("datetime64[ns]"),
-        "ring_id": roles["ring_id"].astype("string"),
-        "ring_source": roles["ring_source"].astype("string"),
-    }).sort_values("account_id").reset_index(drop=True)
+def build_splits(dataset: str, transactions: pd.DataFrame, account_labels: pd.DataFrame,
+                 shares: dict[str, float]) -> dict:
+    """The splits.json content (docs/04-CONTRACT.md section 2.4)."""
+    split = compute_split(transactions, shares)
+    return {
+        "dataset": dataset,
+        **{key: value.strftime("%Y-%m-%dT%H:%M:%S") for key, value in split.items()},
+        "shares": dict(shares),
+        "mule_counts": count_mules(account_labels, split),
+    }
 
 
-def make_labels(dataset: str) -> Path:
+def run_labels(dataset: str) -> Path:
     """Run P3 for one dataset and return the output folder."""
     started = now_utc()
     settings = load_settings()
     folder = path("processed") / dataset
-    transactions = pd.read_parquet(folder / "transactions.parquet",
-                                   columns=["txn_id", "timestamp", "sender_id", "receiver_id", "is_self"])
-    labels = pd.read_parquet(folder / "labels_txn.parquet")
+    transactions_file = folder / c.TRANSACTIONS.filename
+    labels_file = folder / c.LABELS_TXN.filename
 
-    print("Assigning roles ...")
-    roles = account_roles(transactions, labels)
-    print("Grouping rings ...")
-    roles = assign_rings(roles, transactions, labels)
-    account_labels = to_contract(roles)
+    transactions = pd.read_parquet(
+        transactions_file, columns=["txn_id", "timestamp", "sender_id", "receiver_id", "is_self"])
+    labels_txn = pd.read_parquet(labels_file)
 
-    cuts = time_split(transactions, settings["split"])
-    counts = mule_counts(account_labels, transactions, cuts)
-    splits = {
-        "dataset": dataset,
-        **{key: value.isoformat() for key, value in cuts.items()},
-        "shares": settings["split"],
-        "mule_counts": counts,
+    account_labels = build_account_labels(transactions, labels_txn)
+    splits = build_splits(dataset, transactions, account_labels, settings["split"])
+
+    account_labels.to_parquet(folder / c.ACCOUNT_LABELS.filename, index=False)
+    (folder / c.SPLITS_FILENAME).write_text(json.dumps(splits, indent=2), encoding="utf-8")
+
+    self_laundering = int((labels_txn["is_laundering"] == 1).sum()) - len(laundering_edges(transactions, labels_txn))
+    counts = {
+        "accounts": len(account_labels),
+        "roles": {role: int((account_labels["role"] == role).sum()) for role in c.ROLES},
+        "rings": {source: int(account_labels.loc[account_labels["ring_source"] == source, "ring_id"].nunique())
+                  for source in c.RING_SOURCES},
+        "laundering_self_transfers_ignored": self_laundering,
+        "mule_counts": splits["mule_counts"],
     }
+    write_manifest(folder, "labels", started, dataset=dataset,
+                   inputs=[file_info(transactions_file), file_info(labels_file)], counts=counts)
 
-    account_labels.to_parquet(folder / "account_labels.parquet", index=False)
-    (folder / "splits.json").write_text(json.dumps(splits, indent=2), encoding="utf-8")
-
-    summary = {
-        "roles": account_labels["role"].value_counts().to_dict(),
-        "rings": account_labels.groupby("ring_source")["ring_id"].nunique().to_dict(),
-        "laundering_accounts_without_ring": int(((account_labels["role"] != "NORMAL")
-                                                 & account_labels["ring_id"].isna()).sum()),
-        "largest_ring": int(account_labels["ring_id"].value_counts().max()),
-    }
-    write_manifest(folder, "labels", started, dataset=dataset, summary=summary, splits=splits)
-
-    print(json.dumps({"summary": summary, "splits": splits}, indent=2))
+    for key, value in counts.items():
+        print(f"  {key}: {value}")
+    print(f"  split: train_end={splits['train_end']} validation_end={splits['validation_end']} "
+          f"test_end={splits['test_end']}")
     print(f"Wrote {folder}")
     return folder
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="P3 Labels and time split")
+    parser = argparse.ArgumentParser(description="P3 Labels and split: account roles, rings, time split")
     parser.add_argument("--dataset", required=True, help="dataset name from settings.yaml")
-    make_labels(parser.parse_args().dataset)
+    run_labels(parser.parse_args().dataset)
 
 
 if __name__ == "__main__":

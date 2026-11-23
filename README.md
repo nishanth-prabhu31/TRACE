@@ -13,6 +13,22 @@ python -m venv .venv
 
 Download IBM AMLworld HI-Small (`HI-Small_Trans.csv`, `HI-Small_Patterns.txt`) from Kaggle into `data/raw/ibm_hi_small/`. See `docs/02-DATA.md`.
 
+## Run
+
+```bash
+.venv\Scripts\python -m pytest -q
+.venv\Scripts\python scripts/make_fake_data.py
+.venv\Scripts\python -m streamlit run app/main.py
+```
+
+Pipeline steps, in order (each runs alone):
+
+```bash
+.venv\Scripts\python -m trace_aml.pipeline.ingest --dataset ibm_hi_small
+.venv\Scripts\python -m trace_aml.pipeline.labels --dataset ibm_hi_small
+.venv\Scripts\python -m trace_aml.pipeline.quality --dataset ibm_hi_small
+```
+
 ## Where to start
 
 `AGENTS.md` → `CHECKLIST.md` → `docs/`.

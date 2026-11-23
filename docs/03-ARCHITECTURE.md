@@ -95,7 +95,7 @@ Each step also runs alone, e.g. `python -m trace_aml.pipeline.features --dataset
 A **run** = one dataset scored by one model version. Every run gets its own folder `data/runs/<run_id>/` (e.g. `ibm_hi_small__test__v1`), containing its scores, reasons, trails, rings and a `manifest.json` (which data, which model, which cut-off, when, with what settings). The app shows one run at a time; the sidebar picks which.
 
 ### 2.2 Manifests
-Every pipeline step writes a small `manifest.json` next to its output: input files (+ size and modified time), settings used, random seed, contract version, start and end time. When a number in a report looks odd, the manifest says exactly what produced it.
+Every pipeline step writes a small manifest next to its output (`manifest_<step>.json` where several steps share a folder, e.g. `data/processed/<dataset>/`; `manifest.json` in a run folder): input files (+ size and modified time), settings used, random seed, contract version, start and end time. When a number in a report looks odd, the manifest says exactly what produced it.
 
 ## 3. App (Streamlit)
 
@@ -315,3 +315,6 @@ Nothing in the pipeline or storage changes. That is why `app/logic/` is kept sep
 | Package name `trace_aml` | Avoids clash with Python's built-in `trace` module |
 | One settings file | Every 🔧 value is findable and changeable in one place |
 | Runs as folders with manifests | Any number can be traced back to exactly what produced it |
+| pandas 3 (not 2), versions pinned in `requirements.txt` | The pinned set installs cleanly on Python 3.11 and all tests pass on it (2026-11-14) |
+| Graph component: `streamlit-agraph` | Verified to return the clicked node (`06-DASHBOARD.md` section 14) |
+| `app/logic/navigation.py` holds hop history as plain functions | Testable without Streamlit |

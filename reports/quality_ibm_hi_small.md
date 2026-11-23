@@ -1,15 +1,15 @@
-# Quality report: ibm_hi_small
+# Data quality report: ibm_hi_small
 
 **Overall: ⚠️ WARN**
 
-| Check | Status | Value | Detail |
-|---|---|---|---|
-| C1 Format | ✅ PASS | 2e-06 | 9 of 5,078,345 rows dropped as broken (0.0002%); 1,108 tail rows removed on purpose |
-| C2 Labels | ✅ PASS | 795 | NORMAL 509,216, SINK 2,826, SOURCE 2,241, MULE 795 |
-| C3 Time spread | ✅ PASS | 65 | new mules: train 520, validation 210, test 65; known mules still active in test 602 (new share 0.097) |
-| C4 Giveaway test | ✅ PASS | 0.0064 | highest single-column PR-AUC 0.006 (txn:channel); chance level is about 0.0011 for transactions and 0.0016 for accounts. All: txn:amount 0.004, txn:channel 0.006, txn:currency_original 0.002, txn:hour 0.001, txn:sender_bank 0.005, txn:receiver_bank 0.002, account:main_channel 0.004, account:main_currency 0.002, account:mean_amount 0.002, account:bank 0.002 |
-| C5 Overlap | ✅ PASS | 0.0176 | best one-threshold F1 0.018 (out_degree). All: in_degree 0.016, out_degree 0.018, total_amount 0.010 |
-| C6 Graph sanity | ✅ PASS | 0.9987 | 99.9% of mules are in the largest connected part (371,915 of 422,656 accounts); 93.0% of the top-1% most connected accounts are normal (normal hubs exist) |
-| C7 Compatibility | ⚠️ WARN | None | not checked yet: no feature files exist (run again after the feature step) |
+Label-based checks (C4, C5, C6) use only the train and validation periods.
 
-Thresholds: config/settings.yaml `quality_gate`. Meaning of each check: docs/02-DATA.md section 8.
+| # | Check | Status | Value | Detail |
+|---|---|---|---|---|
+| C1 | Format | ✅ PASS | 0.0 | 0.0002% of rows dropped as broken (9 rows); 1,108 tail rows removed on purpose |
+| C2 | Labels | ✅ PASS | 795.0 | 795 mule, 2,241 source, 2,826 sink, 509,216 normal |
+| C3 | Time spread | ⚠️ WARN | 202.0 | mules: 340 train, 253 new in validation, 202 new in test; 60% of the 667 mules active in the test period were not mules in the train period |
+| C4 | Giveaway test | ✅ PASS | 0.0078 | highest one-column PR-AUC: transaction:channel = 0.008 (fitted on train, scored on validation). All: transaction:channel 0.008, account:bank 0.007, transaction:sender_bank 0.006, transaction:amount 0.005, account:channel 0.003, account:amount 0.003, account:currency_original 0.003, account:hour 0.002, transaction:receiver_bank 0.002, transaction:currency_original 0.002, transaction:hour 0.001 |
+| C5 | Overlap | ✅ PASS | 0.0171 | best one-threshold F1 (data up to end of validation): in_degree 0.014, out_degree 0.017, total_amount 0.008 |
+| C6 | Graph sanity | ✅ PASS | 0.9983 | 100% of mules are in the largest connected part; 80 of the 100 best-connected accounts are normal |
+| C7 | Compatibility | ✅ PASS | 0.0 | 41 features in 10 files; constant: none; all empty: none |

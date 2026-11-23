@@ -1,37 +1,46 @@
-"""Relative-amount features: unusual sizes without any currency (docs/05-FEATURES-MODEL.md 2.4)."""
+"""Relative-amount features: amount signals that do not depend on the currency
+(docs/05-FEATURES-MODEL.md 2.4)."""
 
 import numpy as np
 import pandas as pd
 
+from trace_aml.features.prep import History, check_cutoff
 
-def _percentile(values: pd.Series, reference_sorted: np.ndarray) -> pd.Series:
-    """Percentile (0-100) of each value among the reference amounts."""
-    rank = np.searchsorted(reference_sorted, values.to_numpy(), side="right")
-    return pd.Series(100 * rank / len(reference_sorted), index=values.index)
+PERCENT = 100.0
 
 
-def relative_features(events: pd.DataFrame, all_amounts_sorted: np.ndarray,
-                      round_divisor: float) -> pd.DataFrame:
-    """One row per account. `all_amounts_sorted` = every transaction amount <= cutoff, sorted."""
-    out = pd.DataFrame(index=pd.Index(events["account_id"].unique(), name="account_id"))
-    out["self_txn_share"] = events.groupby("account_id")["is_self"].mean().reindex(out.index)
+def percentile_among(sorted_values: np.ndarray, values: pd.Series) -> pd.Series:
+    """Share (0-100) of `sorted_values` that are <= each value."""
+    position = np.searchsorted(sorted_values, values.to_numpy(dtype="float64"), side="right")
+    return pd.Series(PERCENT * position / max(len(sorted_values), 1), index=values.index).where(values.notna())
 
-    ev = events[~events["is_self"]]
-    grouped = ev.groupby("account_id")
-    median = grouped["amount"].median()
-    max_in = ev[ev["direction"] == "IN"].groupby("account_id")["amount"].max()
-    max_out = ev[ev["direction"] == "OUT"].groupby("account_id")["amount"].max()
 
-    out["max_in_vs_own_median"] = (max_in / median).reindex(out.index)
-    out["max_out_vs_own_median"] = (max_out / median).reindex(out.index)
-    out["max_in_pctl"] = _percentile(max_in, all_amounts_sorted).reindex(out.index)
-    out["mean_amount_pctl"] = _percentile(grouped["amount"].mean(), all_amounts_sorted).reindex(out.index)
+def channel_entropy(history: History, cutoff: pd.Timestamp) -> pd.Series:
+    """How mixed an account's payment channels are, in bits (0 = always the same channel)."""
+    check_cutoff(history, cutoff)
+    counts = history.legs.groupby(["a", "channel"]).size()
+    share = counts / counts.groupby(level="a").transform("sum")
+    return (-(share * np.log2(share))).groupby(level="a").sum().abs().reindex(history.active)
 
-    is_round = (ev["amount_original"] % round_divisor) == 0
-    out["round_amount_share"] = is_round.groupby(ev["account_id"]).mean().reindex(out.index)
 
-    shares = ev.groupby(["account_id", "channel"]).size() / grouped.size()
-    entropy = -(shares * np.log2(shares)).groupby(level="account_id").sum()
-    out["channel_entropy"] = entropy.reindex(out.index)
+def relative_features(history: History, cutoff: pd.Timestamp, settings: dict) -> pd.DataFrame:
+    """All relative-amount features for the scored accounts, indexed by account code."""
+    check_cutoff(history, cutoff)
+    legs = history.legs
+    amounts = legs.groupby("a")["amount"]
+    own_median = amounts.median().reindex(history.active)
+    max_in = legs[legs["is_in"]].groupby("a")["amount"].max().reindex(history.active)
+    max_out = legs[~legs["is_in"]].groupby("a")["amount"].max().reindex(history.active)
 
-    return out.astype("float32")
+    every_amount = np.sort(history.flows["amount"].to_numpy())
+    out = pd.DataFrame(index=history.active)
+    out["max_in_vs_own_median"] = max_in / own_median
+    out["max_out_vs_own_median"] = max_out / own_median
+    out["max_in_pctl"] = percentile_among(every_amount, max_in)
+    out["mean_amount_pctl"] = percentile_among(every_amount, amounts.mean().reindex(history.active))
+
+    divisor = settings["features"]["round_amount_divisor"]
+    is_round = np.mod(legs["amount_original"], divisor) == 0
+    out["round_amount_share"] = is_round.groupby(legs["a"]).mean().reindex(history.active)
+    out["channel_entropy"] = channel_entropy(history, cutoff)
+    return out

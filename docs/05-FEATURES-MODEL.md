@@ -126,9 +126,9 @@ Each rule has a test with a hand-made mini graph that must fire it and a normal 
 TRACE **detects** accounts that are already acting as mules; it does not predict who will become one.
 
 - **Snapshots:** in the train period, take a cut-off every 24 h 🔧. At each snapshot, every account active in the 24 h before it is one row: its features at that cut-off + label.
-- **Label of a training row:**
+- **Label of a training row** (roles as of the **end of the train period**, `02-DATA.md` 5.5):
   - role MULE and `mule_since <= cut-off` → **1**
-  - role NORMAL → **0**
+  - role NORMAL → **0** (even if the account turns out to be a mule later; that is not known at training time)
   - role MULE but `mule_since > cut-off` (not yet acting as a mule) → **row dropped** (labelling it 0 would teach the model that early mule behaviour is normal)
   - role SOURCE or SINK → **row dropped**
 - **Validation and test:** scored as in rule 1.5 (highest risk over the period's snapshots). **Positives are only "new" mules**: `mule_since` inside that period. Mules whose `mule_since` is before the period (train **or** validation, for the test) are "known" mules, removed from the main metrics and reported separately. SOURCE / SINK accounts are excluded from the main metrics (section 7, source / sink check).
@@ -278,4 +278,26 @@ Only validation-period feedback is used here (the "evaluation-safe" retrain, `03
 
 | Item | Change | Reason | Date |
 |---|---|---|---|
-| Numeric targets | Not set yet; set after first baseline comparison | | |
+| Numeric targets | Not set yet; first comparison now exists (row below), targets to be agreed by the team | | |
+| **LightGBM settings** (5) | 🔧 changed: learning rate 0.03, 300 trees, **no early stopping**, 15 leaves, 100 rows per leaf, feature fraction 0.5, L2 = 5, class weight = square root of negatives ÷ positives | The first values (31 leaves, 20 rows per leaf, full class weight, early stopping) overfit the 685 positive rows: validation PR-AUC 0.002–0.015. Chosen on the validation period only. Validation PR-AUC per tree was too noisy for early stopping | 2026-11-14 |
+| Baseline settings (5) | Random Forest: 20 rows per leaf, each tree sees 20% of rows. Isolation Forest: 200 trees, 256 rows each. Logistic Regression: 1,000 iterations | Training time on 1.36M rows; values in `settings.yaml` | 2026-11-14 |
+| Validation rows for model fitting (4) | Validation snapshot rows are labelled as of the end of validation, leaving out accounts already mules at the end of train | Matches the "new mules" definition of the main metrics | 2026-11-14 |
+| Calibration unit (6.1) | The isotonic calibrator is fitted on validation **accounts** (each account's highest snapshot score; new mules vs normal) | That is the unit that receives a risk | 2026-11-14 |
+| `likely_mule_cut` fallback (6.2) | If no cut reaches the precision target on validation, the best-F1 cut is used and `precision_target_met = false` is saved in `meta.json` | The original text had no fallback | 2026-11-14 |
+| Money trail first hop (6.4) | The first hop into the account must lie in the 24 h before the snapshot; a trail needs at least one transfer in and one out | Keeps trails about recent activity | 2026-11-14 |
+| **First results, HI-Small, v1** (7) | Synthetic data, time-ordered split, **test period**, 202 new mules among 349,700 accounts, 5 seeds, PR-AUC mean ± sd: RULES 0.0011 ± 0; ISOLATION_FOREST 0.0018 ± 0.0001; LOGREG 0.0086 ± 0; TXN_ONLY 0.081 ± 0.021; **LIGHTGBM 0.165 ± 0.042**; RANDOM_FOREST 0.276 ± 0.013. LightGBM Precision@50 0.44, @100 0.34, @500 0.15; Recall@500 0.36. **Minimum bar met** (LightGBM beats RULES and TXN_ONLY). **Random Forest beats LightGBM** on test and on validation (0.260 vs 0.211) and varies less between seeds. Full tables: `reports/eval_v1.md` | First comparison | 2026-11-14 |
+| **First results, LI-Small, v1 settings** (7) | Synthetic data, trained and tested on LI-Small itself, time-ordered split, **test period**, 91 new mules among 479,360 accounts (base rate 0.0002), 5 seeds, PR-AUC mean ± sd: RULES 0.0002 ± 0; ISOLATION_FOREST 0.0008 ± 0.0001; LOGREG 0.0030 ± 0; TXN_ONLY 0.0053 ± 0.0080; **LIGHTGBM 0.0080 ± 0.0039**; RANDOM_FOREST 0.050 ± 0.010. LightGBM Precision@100 0.022, Recall@500 0.077. **Much weaker than HI-Small.** LightGBM is above TXN_ONLY only within seed noise, so the minimum bar is **not clearly met on LI-Small**; LightGBM's ROC-AUC (0.79 ± 0.09) is unstable while Random Forest's is 0.949 ± 0.002. With 141 training mules and 91 test positives every number here is noisy. Full tables: `reports/eval_v1_ibm_li_small.md` | Harder-version test | 2026-11-14 |
+| Ablations, HI-Small test (5.1) | PR-AUC without a family: RELATIVE 0.084, TEMPORAL 0.123, STRUCTURAL 0.130, FLOW 0.172, RULES 0.172 (FULL 0.165 ± 0.042). Relative amounts matter most; removing fund-flow or rule flags costs nothing measurable. Differences below about 0.04 are within seed noise | First comparison | 2026-11-14 |
+| Verdict bands on the first real run (6.2) | ⚠️ `watch_cut` from the 80%-recall rule is 0.2: 23,158 of 354,230 test-period accounts are WATCH and 27 are LIKELY_MULE. The WATCH rule needs a team decision | First real run | 2026-11-14 |
+| Channel finding (2) | In the train period 83% of laundering transfers are ACH (12% of normal ones) and 72% go between a pair that transacts only once (9%). TRACE uses no channel-identity feature, by design (it would not carry to other datasets) | Train-period analysis | 2026-11-14 |
+| Same-minute ordering (2.3) | Within one timestamp, money arriving is processed before money leaving | Timestamps are minute-precise; otherwise money forwarded in the same minute would not match | 2026-11-14 |
+| Holding times (2.3) | Median and 10th percentile are taken over matched pieces, unweighted | Simplest reading of the definition | 2026-11-14 |
+| `chain_count` (2.3) | Counts paths A → X → C → D where each later hop is at or after the previous one, within 24 h, and at least 50% of its amount. Uses all history up to the cut-off | Exact definition used in code | 2026-11-14 |
+| `cycle_count` and CYCLE rule (2.3, 3) | The search does not continue through an account that sent more than 30 transfers 🔧 in the time left (`max_branch`). Cycles through such hubs are not counted | Keeps the search fast; laundering cycles go through quiet accounts | 2026-11-14 |
+| `fan_in_max_1h` / `fan_out_max_1h` | Window length is `features.fan_window_hours` | No magic numbers | 2026-11-14 |
+| CHAIN rule (3) | Flags the two middle accounts of a 3-hop path, not its first sender or last receiver | A mule is a pass-through account | 2026-11-14 |
+| FAN_OUT rule (3) | "Funded by" = money received from 2 h before the first payout until the last payout is at least 80% 🔧 of the payouts (`funded_share`) | The original text gave no number | 2026-11-14 |
+| `rule_score` (3.3) | The value saved in `<cutoff>_rules.parquet` is the plain share of rules fired (no labels). The validation-precision weights of the RULES baseline are computed in training | Rule code must not read labels (hard rule 1) | 2026-11-14 |
+| Feature engine speed (2) | 41 features for ~225K accounts in about 35 s per snapshot on HI-Small, betweenness included; kept enabled. Rules: about 30 s per snapshot | Measured | 2026-11-14 |
+| Rules on HI-Small (3) | Per snapshot, of ~225K accounts: PASS_THROUGH fires ~1,900, CHAIN ~250, CYCLE ~50, FAN_IN 0–20, FAN_OUT 0–10 | First real run | 2026-11-14 |
+| Training and evaluation labels (4) | Roles are taken as of the end of the period they are used in | Stops training labels using later transactions (`02-DATA.md` 5.5) | 2026-11-14 |

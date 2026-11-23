@@ -1,0 +1,22 @@
+{
+  "step": "quality_ibm_li_small",
+  "contract_version": 2,
+  "settings_hash": "e66689d76fe1",
+  "random_seed": 42,
+  "started_at": "2026-11-14T10:37:15Z",
+  "finished_at": "2026-11-14T11:00:40Z",
+  "dataset": "ibm_li_small",
+  "overall": "WARN",
+  "inputs": [
+    {
+      "file": "transactions.parquet",
+      "bytes": 277824168,
+      "modified": "2026-11-14T08:31:27Z"
+    },
+    {
+      "file": "account_labels.parquet",
+      "bytes": 6179949,
+      "modified": "2026-11-14T08:31:42Z"
+    }
+  ]
+}

@@ -1,47 +1,63 @@
-"""Temporal features: how active and how bursty an account is (docs/05-FEATURES-MODEL.md 2.2)."""
+"""Temporal features: how an account's activity behaves over time (docs/05-FEATURES-MODEL.md 2.2)."""
 
 import numpy as np
 import pandas as pd
 
+from trace_aml.features.prep import SECONDS_PER_HOUR, History, check_cutoff
 
-def temporal_features(events: pd.DataFrame, cutoff: pd.Timestamp, windows_hours: list[int],
-                      night_hours: tuple[int, int], new_counterparty_hours: int) -> pd.DataFrame:
-    """One row per account. `events` must already be limited to timestamp <= cutoff."""
-    ev = events[~events["is_self"]]
-    grouped = ev.groupby("account_id")
-    out = pd.DataFrame(index=pd.Index(events["account_id"].unique(), name="account_id"))
+HOURS_PER_DAY = 24
 
-    for hours in windows_hours:
-        recent = ev[ev["timestamp"] > cutoff - pd.Timedelta(hours=hours)]
-        counts = recent.groupby(["account_id", "direction"]).size().unstack(fill_value=0)
-        out[f"in_cnt_{hours}h"] = counts.get("IN", pd.Series(dtype=float)).reindex(out.index).fillna(0)
-        out[f"out_cnt_{hours}h"] = counts.get("OUT", pd.Series(dtype=float)).reindex(out.index).fillna(0)
 
-    first_seen = events.groupby("account_id")["timestamp"].min().reindex(out.index)
-    age_hours = (cutoff - first_seen) / pd.Timedelta(hours=1)
+def window_counts(history: History, cutoff: pd.Timestamp, hours: int) -> pd.DataFrame:
+    """Received and sent transactions in the `hours` before the cut-off."""
+    check_cutoff(history, cutoff)
+    legs = history.legs
+    recent = legs[legs["t"] > history.cutoff_s - hours * SECONDS_PER_HOUR]
+    counts = recent.groupby(["a", "is_in"]).size().unstack(fill_value=0)
+    out = pd.DataFrame(index=history.active)
+    out[f"in_cnt_{hours}h"] = counts[True] if True in counts else 0
+    out[f"out_cnt_{hours}h"] = counts[False] if False in counts else 0
+    return out.fillna(0)
+
+
+def burstiness(history: History, cutoff: pd.Timestamp) -> pd.Series:
+    """(sd - mean) / (sd + mean) of the gaps between an account's transactions.
+
+    -1 = perfectly regular, +1 = very bursty. Empty if fewer than 3 transactions,
+    or if every gap is zero.
+    """
+    check_cutoff(history, cutoff)
+    legs = history.legs
+    gap = legs["t"].diff().where(legs["a"].eq(legs["a"].shift())).astype("float64")
+    stats = gap.groupby(legs["a"]).agg(["mean", "count"])
+    spread = gap.groupby(legs["a"]).std(ddof=0)
+    total = spread + stats["mean"]
+    value = (spread - stats["mean"]) / total.where(total > 0)
+    return value.where(stats["count"] >= 2).reindex(history.active)   # 2 gaps = 3 transactions
+
+
+def temporal_features(history: History, cutoff: pd.Timestamp, settings: dict) -> pd.DataFrame:
+    """All temporal features for the scored accounts, indexed by account code."""
+    check_cutoff(history, cutoff)
+    legs, features = history.legs, settings["features"]
+    out = pd.concat([window_counts(history, cutoff, hours) for hours in features["windows_hours"]], axis=1)
+
+    by_account = legs.groupby("a")
+    n_all = by_account.size().reindex(history.active, fill_value=0)
+    age_hours = (history.cutoff_s - by_account["t"].min().reindex(history.active)) / SECONDS_PER_HOUR
     out["age_hours"] = age_hours
+    per_day = n_all / np.maximum(age_hours / HOURS_PER_DAY, 1.0)
+    out["cnt_24h_vs_avg"] = (out["in_cnt_24h"] + out["out_cnt_24h"]) / (per_day + 1.0)
+    out["burstiness"] = burstiness(history, cutoff)
+    out["active_hours_spread"] = legs.drop_duplicates(["a", "hour"]).groupby("a").size().reindex(history.active)
 
-    total = grouped.size().reindex(out.index).fillna(0)
-    last_24h = ev[ev["timestamp"] > cutoff - pd.Timedelta(hours=24)].groupby("account_id").size()
-    days = np.maximum(age_hours / 24, 1)
-    out["cnt_24h_vs_avg"] = last_24h.reindex(out.index).fillna(0) / (total / days + 1)
+    first_met = legs.groupby(["a", "o"])["t"].min()
+    is_new = first_met > history.cutoff_s - features["new_counterparty_hours"] * SECONDS_PER_HOUR
+    new = is_new.groupby(level="a").sum().reindex(history.active, fill_value=0)
+    old = (~is_new).groupby(level="a").sum().reindex(history.active, fill_value=0)
+    out["new_counterparties_24h_ratio"] = new / (old + 1.0)
 
-    gaps = ev["timestamp"].diff().dt.total_seconds()
-    gaps[ev["account_id"].ne(ev["account_id"].shift())] = np.nan
-    gap_stats = gaps.groupby(ev["account_id"]).agg(["mean", "std", "count"])
-    burst = (gap_stats["std"] - gap_stats["mean"]) / (gap_stats["std"] + gap_stats["mean"])
-    burst[gap_stats["count"] < 2] = np.nan  # needs at least 3 transactions (2 gaps)
-    out["burstiness"] = burst.reindex(out.index)
-
-    hours_of_day = ev["timestamp"].dt.hour
-    out["active_hours_spread"] = hours_of_day.groupby(ev["account_id"]).nunique().reindex(out.index)
-    night = (hours_of_day >= night_hours[0]) & (hours_of_day < night_hours[1])
-    out["night_share"] = night.groupby(ev["account_id"]).mean().reindex(out.index)
-
-    pair_first = ev.groupby(["account_id", "counterparty"])["timestamp"].min().reset_index()
-    is_new = pair_first["timestamp"] > cutoff - pd.Timedelta(hours=new_counterparty_hours)
-    new_cp = is_new.groupby(pair_first["account_id"]).sum()
-    old_cp = (~is_new).groupby(pair_first["account_id"]).sum()
-    out["new_counterparties_24h_ratio"] = (new_cp / (old_cp + 1)).reindex(out.index)
-
-    return out.astype("float32")
+    night_start, night_end = features["night_hours"]
+    at_night = legs["hour"].between(night_start, night_end - 1)
+    out["night_share"] = at_night.groupby(legs["a"]).mean().reindex(history.active)
+    return out

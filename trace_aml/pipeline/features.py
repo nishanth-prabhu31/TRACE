@@ -1,92 +1,112 @@
-"""P4 Features: measure every active account at a cut-off and save one file per cut-off (F-04).
+"""P4 Features: compute every catalogue feature for the accounts active at a cut-off (F-04).
 
-Rule: features at cut-off T use only transactions with timestamp <= T
-(docs/05-FEATURES-MODEL.md section 1). Labels are never read here.
+Reads data/processed/<dataset>/transactions.parquet (never the label files) and writes
+data/features/<dataset>/<cutoff>.parquet (docs/04-CONTRACT.md section 4.1).
 
 Usage:
     python -m trace_aml.pipeline.features --dataset ibm_hi_small --cutoff 2022-09-07T00:00
-    python -m trace_aml.pipeline.features --dataset ibm_hi_small --all
+    python -m trace_aml.pipeline.features --dataset ibm_hi_small --all-snapshots
 """
 
 import argparse
-import json
+import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
+from trace_aml import contract as c
 from trace_aml.config import load_settings, path
-from trace_aml.features.events import account_events, active_accounts
+from trace_aml.features.catalog import FEATURE_SETS
+from trace_aml.features.flow import flow_features
+from trace_aml.features.prep import prepare
 from trace_aml.features.relative import relative_features
+from trace_aml.features.structural import structural_features
 from trace_aml.features.temporal import temporal_features
-from trace_aml.pipeline.common import now_utc, write_manifest
+from trace_aml.pipeline.common import file_info, now_utc, write_manifest
+from trace_aml.pipeline.split import compute_split, snapshot_times
 
-TXN_COLUMNS = ["txn_id", "timestamp", "sender_id", "receiver_id", "amount",
-               "amount_original", "channel", "is_self"]
-
-
-def compute_features(transactions: pd.DataFrame, cutoff: pd.Timestamp, settings: dict) -> pd.DataFrame:
-    """All features for accounts active in the look-back window before `cutoff`."""
-    feats = settings["features"]
-    accounts = active_accounts(transactions, cutoff, settings["scoring"]["active_lookback_hours"])
-    events = account_events(transactions, cutoff, accounts)
-    amounts = np.sort(transactions.loc[transactions["timestamp"] <= cutoff, "amount"].to_numpy())
-
-    families = [
-        temporal_features(events, cutoff, feats["windows_hours"], tuple(feats["night_hours"]),
-                          feats["new_counterparty_hours"]),
-        relative_features(events, amounts, feats["round_amount_divisor"]),
-    ]
-    table = pd.concat(families, axis=1).reindex(accounts)
-    table.insert(0, "cutoff", cutoff)
-    table = table.reset_index()
-    table["account_id"] = table["account_id"].astype("string")
-    table["cutoff"] = table["cutoff"].astype("datetime64[ns]")
-    return table
+FAMILIES = {"STRUCTURAL": structural_features, "TEMPORAL": temporal_features,
+            "FLOW": flow_features, "RELATIVE": relative_features}
+NEEDED_COLUMNS = ["txn_id", "timestamp", "sender_id", "receiver_id", "amount", "amount_original",
+                  "channel", "is_self"]
 
 
-def snapshot_cutoffs(splits: dict, every_hours: int) -> list[pd.Timestamp]:
-    """Every `every_hours` from the first full day to the end of the test period."""
-    start, end = pd.Timestamp(splits["data_start"]), pd.Timestamp(splits["test_end"])
-    return list(pd.date_range(start + pd.Timedelta(hours=every_hours), end, freq=f"{every_hours}h"))
+def feature_columns(settings: dict) -> list[str]:
+    """The non-rule feature columns this run produces, in catalogue order."""
+    wanted = [name for name in FEATURE_SETS["FULL"] if name not in FEATURE_SETS["RULES"]]
+    if not settings["features"]["betweenness"]["enabled"]:
+        wanted.remove("betweenness_local")
+    return wanted
 
 
-def cutoff_name(cutoff: pd.Timestamp) -> str:
-    return cutoff.strftime("%Y%m%dT%H%M")
+def compute_features(transactions: pd.DataFrame, cutoff: pd.Timestamp, settings: dict,
+                     score_all: bool = False, timings: dict | None = None) -> pd.DataFrame:
+    """Features for one cut-off, using only transactions with timestamp <= cutoff.
+
+    score_all = False: accounts active in the look-back window (split runs).
+    score_all = True: every account in the data (uploads, replay windows).
+    Returns the contract table: account_id, cutoff, then one float32 column per feature.
+    """
+    cutoff = pd.Timestamp(cutoff)
+    lookback = None if score_all else settings["scoring"]["active_lookback_hours"]
+    started = time.perf_counter()
+    history = prepare(transactions, cutoff, lookback)
+    if timings is not None:
+        timings["prepare"] = round(time.perf_counter() - started, 1)
+
+    parts = []
+    for family, function in FAMILIES.items():
+        started = time.perf_counter()
+        parts.append(function(history, cutoff, settings))
+        if timings is not None:
+            timings[family.lower()] = round(time.perf_counter() - started, 1)
+    values = pd.concat(parts, axis=1)[feature_columns(settings)].astype("float32")
+
+    out = pd.DataFrame({
+        "account_id": pd.Series(history.names[history.active], dtype="string"),
+        "cutoff": pd.Series(cutoff, index=range(len(history.active))).astype("datetime64[ns]"),
+    })
+    return pd.concat([out, values.reset_index(drop=True)], axis=1)
 
 
-def run_features(dataset: str, cutoffs: list[pd.Timestamp] | None = None) -> Path:
-    """Run P4 for the given cut-offs (default: every snapshot) and return the output folder."""
+def cutoff_filename(cutoff: pd.Timestamp) -> str:
+    """File name for a cut-off, e.g. 20220907T0000.parquet."""
+    return f"{pd.Timestamp(cutoff):%Y%m%dT%H%M}.parquet"
+
+
+def run_features(dataset: str, cutoffs: list[pd.Timestamp] | None) -> Path:
+    """Run P4 for the given cut-offs (None = every snapshot of the time split)."""
     started = now_utc()
     settings = load_settings()
-    processed = path("processed") / dataset
-    splits = json.loads((processed / "splits.json").read_text(encoding="utf-8"))
-    cutoffs = cutoffs or snapshot_cutoffs(splits, settings["scoring"]["snapshot_every_hours"])
+    source = path("processed") / dataset / c.TRANSACTIONS.filename
+    transactions = pd.read_parquet(source, columns=NEEDED_COLUMNS)
+    if cutoffs is None:
+        split = compute_split(transactions, settings["split"])
+        cutoffs = snapshot_times(split, settings["scoring"]["snapshot_every_hours"])
 
-    transactions = pd.read_parquet(processed / "transactions.parquet", columns=TXN_COLUMNS)
     out = path("features") / dataset
     out.mkdir(parents=True, exist_ok=True)
-
     written = {}
     for cutoff in cutoffs:
-        table = compute_features(transactions, cutoff, settings)
-        name = f"{cutoff_name(cutoff)}.parquet"
-        table.to_parquet(out / name, index=False)
-        written[name] = {"accounts": len(table), "features": table.shape[1] - 2}
-        print(f"  {cutoff}: {len(table):,} accounts x {table.shape[1] - 2} features -> {name}")
-
-    write_manifest(out, "features", started, dataset=dataset, files=written)
+        timings: dict = {}
+        table = compute_features(transactions, cutoff, settings, timings=timings)
+        table.to_parquet(out / cutoff_filename(cutoff), index=False)
+        written[cutoff_filename(cutoff)] = {"accounts": len(table), "seconds": timings}
+        print(f"  {cutoff:%Y-%m-%d %H:%M}: {len(table):,} accounts, seconds {timings}")
+    write_manifest(out, "features", started, dataset=dataset, inputs=[file_info(source)], files=written)
+    print(f"Wrote {out}")
     return out
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="P4 Features")
-    parser.add_argument("--dataset", required=True)
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--cutoff", help="one cut-off, e.g. 2022-09-07T00:00")
-    group.add_argument("--all", action="store_true", help="every daily snapshot")
+    parser = argparse.ArgumentParser(description="P4 Features for one cut-off or for every snapshot")
+    parser.add_argument("--dataset", required=True, help="dataset name from settings.yaml")
+    parser.add_argument("--cutoff", help="one cut-off, e.g. 2022-09-07T00:00")
+    parser.add_argument("--all-snapshots", action="store_true", help="every snapshot of the time split")
     args = parser.parse_args()
-    run_features(args.dataset, None if args.all else [pd.Timestamp(args.cutoff)])
+    if not args.cutoff and not args.all_snapshots:
+        parser.error("give --cutoff or --all-snapshots")
+    run_features(args.dataset, None if args.all_snapshots else [pd.Timestamp(args.cutoff)])
 
 
 if __name__ == "__main__":

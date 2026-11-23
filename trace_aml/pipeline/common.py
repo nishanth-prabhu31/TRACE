@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from trace_aml.config import SETTINGS_FILE
+from trace_aml.config import SETTINGS_FILE, load_settings
 from trace_aml.contract import CONTRACT_VERSION
 
 
@@ -32,6 +32,7 @@ def write_manifest(folder: Path, step: str, started: str, **details) -> Path:
         "step": step,
         "contract_version": CONTRACT_VERSION,
         "settings_hash": settings_hash(),
+        "random_seed": load_settings()["random_seed"],
         "started_at": started,
         "finished_at": now_utc(),
         **details,

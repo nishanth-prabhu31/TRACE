@@ -1,7 +1,10 @@
-"""P2 Quality gate: a pass / warn / fail report card for a dataset (F-02).
+"""P2 Quality gate: a report card every dataset must pass before training (F-02).
 
-Runs checks C1-C7 from docs/02-DATA.md section 8 on the processed files and writes
-reports/quality_<dataset>.md and .json (format: docs/04-CONTRACT.md section 8).
+Reads data/processed/<dataset>/ (after ingest and labels) and writes
+reports/quality_<dataset>.md and .json (docs/02-DATA.md section 8).
+
+Checks that look at labels (C4, C5, C6) use only the train and validation periods,
+so the test period stays untouched. This module is not feature code; it may read labels.
 
 Usage:
     python -m trace_aml.pipeline.quality --dataset ibm_hi_small
@@ -15,245 +18,328 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, precision_recall_curve
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier
 
+from trace_aml import contract as c
 from trace_aml.config import load_settings, path
-from trace_aml.pipeline.common import now_utc, write_manifest
+from trace_aml.pipeline.common import file_info, now_utc, write_manifest
+from trace_aml.pipeline.labels import labels_as_of
 
-ORDER = {"PASS": 0, "WARN": 1, "FAIL": 2}
-
-
-def status_high_is_bad(value: float, warn: float, fail: float) -> str:
-    """FAIL if value >= fail, WARN if value >= warn, else PASS."""
-    return "FAIL" if value >= fail else "WARN" if value >= warn else "PASS"
+Check = dict  # {"id", "name", "status", "value", "detail"}
 
 
-def status_low_is_bad(value: float, warn: float, fail: float) -> str:
-    """FAIL if value < fail, WARN if value < warn, else PASS."""
-    return "FAIL" if value < fail else "WARN" if value < warn else "PASS"
+def low_is_bad(value: float, limits: dict) -> str:
+    """PASS / WARN / FAIL when small values are the problem (e.g. number of mules)."""
+    return "FAIL" if value < limits["fail"] else "WARN" if value < limits["warn"] else "PASS"
 
 
-def check(check_id: str, name: str, status: str, value, detail: str) -> dict:
-    return {"id": check_id, "name": name, "status": status, "value": value, "detail": detail}
+def high_is_bad(value: float, limits: dict) -> str:
+    """PASS / WARN / FAIL when large values are the problem (e.g. a giveaway score)."""
+    return "FAIL" if value >= limits["fail"] else "WARN" if value >= limits["warn"] else "PASS"
 
 
-def single_column_pr_auc(train_x: pd.Series, train_y: pd.Series,
-                         test_x: pd.Series, test_y: pd.Series, seed: int) -> float:
-    """How well ONE column predicts the label on held-out rows (PR-AUC).
+def worst(statuses: list[str]) -> str:
+    """The worst status in a list."""
+    return max(statuses, key=c.STATUSES.index)
 
-    Text columns: score = the category's laundering rate learned on train (smoothed).
-    Number columns: a shallow decision tree on that one number.
+
+def make_check(check_id: str, name: str, status: str, value: float, detail: str) -> Check:
+    return {"id": check_id, "name": name, "status": status, "value": round(float(value), 4), "detail": detail}
+
+
+# --- C1 Format ---------------------------------------------------------------
+
+def check_format(transactions: pd.DataFrame, ingest_counts: dict, limits: dict) -> Check:
+    """C1: required columns present, and the share of rows dropped as broken."""
+    missing = [col.name for col in c.TRANSACTIONS.columns if col.name not in transactions.columns]
+    if missing:
+        return make_check("C1", "Format", "FAIL", 1.0, f"missing columns {missing}")
+    dropped = sum(ingest_counts.get(key, 0) for key in
+                  ("dropped_bad_timestamp", "dropped_non_positive_amount", "dropped_exact_duplicates"))
+    share = dropped / max(ingest_counts.get("rows_read", len(transactions)), 1)
+    detail = f"{share:.4%} of rows dropped as broken ({dropped:,} rows)"
+    if ingest_counts.get("dropped_after_cutoff"):
+        detail += f"; {ingest_counts['dropped_after_cutoff']:,} tail rows removed on purpose"
+    return make_check("C1", "Format", high_is_bad(share, limits), share, detail)
+
+
+# --- C2 Labels and C3 Time spread ---------------------------------------------
+
+def check_labels(account_labels: pd.DataFrame, limits: dict) -> Check:
+    """C2: how many accounts have each role at the end of the data."""
+    counts = account_labels["role"].value_counts().to_dict()
+    mules = counts.get("MULE", 0)
+    detail = ", ".join(f"{counts.get(role, 0):,} {role.lower()}" for role in c.ROLES)
+    return make_check("C2", "Labels", low_is_bad(mules, limits), mules, detail)
+
+
+def check_time_spread(transactions: pd.DataFrame, account_labels: pd.DataFrame, splits: dict,
+                      per_period: dict, new_share: dict) -> Check:
+    """C3: mules in each period, and the share of test-period mules that training never saw."""
+    counts = splits["mule_counts"]
+    fewest = min(counts["train"], counts["validation"], counts["test_new"])
+
+    train_end = pd.Timestamp(splits["train_end"])
+    in_test = transactions["timestamp"] > pd.Timestamp(splits["validation_end"])
+    active = set(transactions.loc[in_test, "sender_id"]) | set(transactions.loc[in_test, "receiver_id"])
+    mules = account_labels[(account_labels["role"] == "MULE") & account_labels["account_id"].isin(active)]
+    share_new = float((mules["mule_since"] > train_end).mean()) if len(mules) else 0.0
+
+    status = worst([low_is_bad(fewest, per_period), low_is_bad(share_new, new_share)])
+    detail = (f"mules: {counts['train']:,} train, {counts['validation']:,} new in validation, "
+              f"{counts['test_new']:,} new in test; {share_new:.0%} of the {len(mules):,} mules active "
+              f"in the test period were not mules in the train period")
+    return make_check("C3", "Time spread", status, fewest, detail)
+
+
+# --- C4 Giveaway test --------------------------------------------------------
+
+def one_column_scores(train_values: pd.Series, train_target: pd.Series, eval_values: pd.Series,
+                      bins: int) -> np.ndarray:
+    """The tiny one-column model: the target rate seen in training for each value.
+
+    Numbers are first cut into bins at the training quantiles. Values never seen in
+    training get the overall training rate.
     """
-    if test_y.sum() == 0:
-        return float("nan")
-    if pd.api.types.is_numeric_dtype(train_x):
-        tree = DecisionTreeClassifier(max_depth=4, min_samples_leaf=50,
-                                      class_weight="balanced", random_state=seed)
-        tree.fit(train_x.to_frame().fillna(0), train_y)
-        scores = tree.predict_proba(test_x.to_frame().fillna(0))[:, 1]
+    if pd.api.types.is_float_dtype(train_values):
+        edges = np.unique(np.quantile(train_values.dropna(), np.linspace(0, 1, bins + 1)))
+        train_key = pd.Series(np.searchsorted(edges, train_values.to_numpy()))
+        eval_key = pd.Series(np.searchsorted(edges, eval_values.to_numpy()))
     else:
-        prior, weight = train_y.mean(), 20
-        stats = train_y.groupby(train_x.astype(str)).agg(["sum", "count"])
-        rate = (stats["sum"] + prior * weight) / (stats["count"] + weight)
-        scores = test_x.astype(str).map(rate).fillna(prior).to_numpy()
-    return float(average_precision_score(test_y, scores))
+        train_key = train_values.astype("string").reset_index(drop=True)
+        eval_key = eval_values.astype("string").reset_index(drop=True)
+    target = train_target.reset_index(drop=True).astype("float64")
+    rates = target.groupby(train_key).mean()
+    return eval_key.map(rates).fillna(target.mean()).to_numpy(dtype="float64")
 
 
-def best_single_threshold_f1(values: pd.Series, labels: pd.Series) -> float:
-    """Best F1 any single cut-off on one number can reach (either direction)."""
+def one_column_pr_auc(train: pd.DataFrame, evaluate: pd.DataFrame, columns: list[str], target: str,
+                      bins: int) -> dict[str, float]:
+    """PR-AUC on the later period of a one-column model fitted on the earlier period."""
+    if evaluate[target].sum() == 0 or train[target].sum() == 0:
+        return {}
+    return {col: float(average_precision_score(
+        evaluate[target], one_column_scores(train[col], train[target], evaluate[col], bins)))
+        for col in columns}
+
+
+def add_simple_columns(transactions: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Add hour of day and (when account IDs carry a bank prefix) the bank columns."""
+    out = transactions.copy()
+    out["hour"] = out["timestamp"].dt.hour.astype("string")
+    columns = ["amount", "channel", "currency_original", "hour"]
+    if out["sender_id"].str.contains("_").all() and out["receiver_id"].str.contains("_").all():
+        out["sender_bank"] = out["sender_id"].str.split("_", n=1).str[0]
+        out["receiver_bank"] = out["receiver_id"].str.split("_", n=1).str[0]
+        columns += ["sender_bank", "receiver_bank"]
+    return out, columns
+
+
+def account_profile(transactions: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Per account: median amount and its most common channel, currency, hour and bank."""
+    sides = []
+    for id_col, bank_col in (("sender_id", "sender_bank"), ("receiver_id", "receiver_bank")):
+        side = transactions[[id_col, "amount", "channel", "currency_original", "hour"]].rename(
+            columns={id_col: "account_id"})
+        if bank_col in columns:
+            side["bank"] = transactions[bank_col]
+        sides.append(side)
+    long = pd.concat(sides, ignore_index=True)
+    profile = long.groupby("account_id")[["amount"]].median()
+    for col in [name for name in long.columns if name not in ("account_id", "amount")]:
+        counts = long.groupby(["account_id", col]).size().reset_index(name="n")
+        top = counts.sort_values(["n", col], ascending=[False, True]).drop_duplicates("account_id")
+        profile[col] = top.set_index("account_id")[col]
+    return profile.reset_index()
+
+
+def check_giveaway(transactions: pd.DataFrame, labels_txn: pd.DataFrame, account_labels: pd.DataFrame,
+                   splits: dict, limits: dict, bins: int) -> Check:
+    """C4: can one raw column alone pick out laundering (per transaction) or mules (per account)?"""
+    train_end, validation_end = pd.Timestamp(splits["train_end"]), pd.Timestamp(splits["validation_end"])
+    data, columns = add_simple_columns(transactions[~transactions["is_self"]])
+    data = data.merge(labels_txn[["txn_id", "is_laundering"]], on="txn_id")
+    early = data[data["timestamp"] <= train_end]
+    later = data[(data["timestamp"] > train_end) & (data["timestamp"] <= validation_end)]
+
+    results = {f"transaction:{col}": value for col, value in
+               one_column_pr_auc(early, later, columns, "is_laundering", bins).items()}
+
+    profiles = []
+    for period, as_of in ((early, train_end), (later, validation_end)):
+        roles = labels_as_of(account_labels, as_of)
+        roles = roles[roles["is_mule"].notna()]
+        profile = account_profile(period, columns).merge(roles[["account_id", "is_mule"]], on="account_id")
+        profile["is_mule"] = profile["is_mule"].astype("int8")
+        profiles.append(profile)
+    account_columns = [col for col in profiles[0].columns if col not in ("account_id", "is_mule")]
+    results.update({f"account:{col}": value for col, value in
+                    one_column_pr_auc(profiles[0], profiles[1], account_columns, "is_mule", bins).items()})
+
+    if not results:
+        return make_check("C4", "Giveaway test", "WARN", 0.0,
+                          "not enough laundering in the train or validation period to run this check")
+    top = max(results, key=results.get)
+    listed = ", ".join(f"{name} {value:.3f}" for name, value in sorted(results.items(), key=lambda x: -x[1]))
+    detail = f"highest one-column PR-AUC: {top} = {results[top]:.3f} (fitted on train, scored on validation). All: {listed}"
+    return make_check("C4", "Giveaway test", high_is_bad(results[top], limits), results[top], detail)
+
+
+# --- C5 Overlap ----------------------------------------------------------------
+
+def best_single_threshold_f1(values: np.ndarray, target: np.ndarray) -> float:
+    """Best F1 any one cut on this number can reach, flagging either the high or the low side."""
     best = 0.0
-    for scores in (values, -values):
-        precision, recall, _ = precision_recall_curve(labels, scores.fillna(0))
-        f1 = 2 * precision * recall / np.clip(precision + recall, 1e-12, None)
-        best = max(best, float(np.nanmax(f1)))
+    for signed in (values, -values):
+        precision, recall, _ = precision_recall_curve(target, signed)
+        f1 = 2 * precision * recall / np.where(precision + recall == 0, 1, precision + recall)
+        best = max(best, float(f1.max()))
     return best
 
 
-def c1_format(counts: dict, limits: dict) -> dict:
-    dropped = (counts.get("dropped_bad_timestamp", 0) + counts.get("dropped_non_positive_amount", 0)
-               + counts.get("dropped_exact_duplicates", 0))
-    share = dropped / counts["rows_read"]
-    return check("C1", "Format", status_high_is_bad(share, limits["warn"], limits["fail"]), round(share, 6),
-                 f"{dropped} of {counts['rows_read']:,} rows dropped as broken ({share:.4%}); "
-                 f"{counts.get('dropped_after_cutoff', 0):,} tail rows removed on purpose")
+def account_simple_stats(transactions: pd.DataFrame) -> pd.DataFrame:
+    """Per account: distinct senders, distinct receivers, and total money in + out."""
+    in_degree = transactions.groupby("receiver_id")["sender_id"].nunique().rename("in_degree")
+    out_degree = transactions.groupby("sender_id")["receiver_id"].nunique().rename("out_degree")
+    total = (transactions.groupby("receiver_id")["amount"].sum()
+             .add(transactions.groupby("sender_id")["amount"].sum(), fill_value=0).rename("total_amount"))
+    stats = pd.concat([in_degree, out_degree, total], axis=1).fillna(0)
+    stats.index.name = "account_id"
+    return stats.reset_index()
 
 
-def c2_labels(roles: pd.Series, limits: dict) -> dict:
-    mules = int((roles == "MULE").sum())
-    detail = ", ".join(f"{k} {v:,}" for k, v in roles.value_counts().items())
-    return check("C2", "Labels", status_low_is_bad(mules, limits["warn"], limits["fail"]), mules, detail)
-
-
-def c3_time_spread(mule_counts: dict, limits: dict) -> dict:
-    periods = {"train": mule_counts["train"], "validation": mule_counts["validation"],
-               "test": mule_counts["test_new"]}
-    lowest = min(periods.values())
-    return check("C3", "Time spread", status_low_is_bad(lowest, limits["warn"], limits["fail"]), lowest,
-                 "new mules: " + ", ".join(f"{k} {v}" for k, v in periods.items())
-                 + f"; known mules still active in test {mule_counts['test_known']}"
-                 + f" (new share {mule_counts['test_new_share']})")
-
-
-def c4_giveaway(txns: pd.DataFrame, accounts: pd.DataFrame, validation_end: pd.Timestamp,
-                limits: dict, seed: int) -> dict:
-    """Transaction level: train before validation_end, test after. Account level: 50/50 split."""
-    txns = txns.assign(hour=txns["timestamp"].dt.hour,
-                       sender_bank=txns["sender_id"].str.split("_").str[0],
-                       receiver_bank=txns["receiver_id"].str.split("_").str[0])
-    early = txns["timestamp"] < validation_end
-    results = {}
-    for col in ("amount", "channel", "currency_original", "hour", "sender_bank", "receiver_bank"):
-        results[f"txn:{col}"] = single_column_pr_auc(
-            txns.loc[early, col], txns.loc[early, "is_laundering"],
-            txns.loc[~early, col], txns.loc[~early, "is_laundering"], seed)
-
-    train, test = train_test_split(accounts, test_size=0.5, stratify=accounts["is_mule"], random_state=seed)
-    for col in ("main_channel", "main_currency", "mean_amount", "bank"):
-        results[f"account:{col}"] = single_column_pr_auc(
-            train[col], train["is_mule"], test[col], test["is_mule"], seed)
-
-    worst_col = max(results, key=lambda k: -1 if np.isnan(results[k]) else results[k])
-    worst = results[worst_col]
-    base_txn = txns.loc[~early, "is_laundering"].mean()
-    base_acc = test["is_mule"].mean()
-    detail = (f"highest single-column PR-AUC {worst:.3f} ({worst_col}); chance level is about "
-              f"{base_txn:.4f} for transactions and {base_acc:.4f} for accounts. All: "
-              + ", ".join(f"{k} {v:.3f}" for k, v in results.items()))
-    return check("C4", "Giveaway test", status_high_is_bad(worst, limits["warn"], limits["fail"]),
-                 round(worst, 4), detail)
-
-
-def c5_overlap(accounts: pd.DataFrame, limits: dict) -> dict:
-    results = {col: best_single_threshold_f1(accounts[col], accounts["is_mule"])
+def check_overlap(transactions: pd.DataFrame, account_labels: pd.DataFrame, splits: dict,
+                  limits: dict) -> Check:
+    """C5: can one threshold on one simple number separate mules from normal accounts?"""
+    validation_end = pd.Timestamp(splits["validation_end"])
+    known = transactions[~transactions["is_self"] & (transactions["timestamp"] <= validation_end)]
+    roles = labels_as_of(account_labels, validation_end)
+    roles = roles[roles["is_mule"].notna()]
+    stats = account_simple_stats(known).merge(roles[["account_id", "is_mule"]], on="account_id")
+    target = stats["is_mule"].astype("int8").to_numpy()
+    if target.sum() == 0:
+        return make_check("C5", "Overlap", "WARN", 0.0, "no mules up to the end of validation")
+    results = {col: best_single_threshold_f1(stats[col].to_numpy(dtype="float64"), target)
                for col in ("in_degree", "out_degree", "total_amount")}
-    worst_col = max(results, key=results.get)
-    worst = results[worst_col]
-    return check("C5", "Overlap", status_high_is_bad(worst, limits["warn"], limits["fail"]), round(worst, 4),
-                 f"best one-threshold F1 {worst:.3f} ({worst_col}). All: "
-                 + ", ".join(f"{k} {v:.3f}" for k, v in results.items()))
+    top = max(results, key=results.get)
+    listed = ", ".join(f"{name} {value:.3f}" for name, value in results.items())
+    return make_check("C5", "Overlap", high_is_bad(results[top], limits), results[top],
+                      f"best one-threshold F1 (data up to end of validation): {listed}")
 
 
-def c6_graph(txns: pd.DataFrame, roles: pd.DataFrame, limits: dict) -> dict:
-    edges = txns.loc[~txns["is_self"], ["sender_id", "receiver_id"]].drop_duplicates()
-    graph = ig.Graph.DataFrame(edges, directed=False, use_vids=False)
-    names = np.array(graph.vs["name"])
+# --- C6 Graph sanity ----------------------------------------------------------
+
+def check_graph(transactions: pd.DataFrame, account_labels: pd.DataFrame, splits: dict,
+                limits: dict, hub_top_n: int) -> Check:
+    """C6: are mules inside the main network, and do normal accounts also act as hubs?"""
+    validation_end = pd.Timestamp(splits["validation_end"])
+    known = transactions[~transactions["is_self"] & (transactions["timestamp"] <= validation_end)]
+    pairs = known[["sender_id", "receiver_id"]].drop_duplicates()
+    codes, names = pd.factorize(pd.concat([pairs["sender_id"], pairs["receiver_id"]], ignore_index=True))
+    half = len(pairs)
+    graph = ig.Graph(n=len(names), edges=np.column_stack([codes[:half], codes[half:]]).tolist(), directed=False)
+
     membership = np.array(graph.connected_components().membership)
     largest = np.bincount(membership).argmax()
-    in_largest = set(names[membership == largest])
-    mules = roles.loc[roles["role"] == "MULE", "account_id"]
-    share = float(mules.isin(in_largest).mean())
+    roles = labels_as_of(account_labels, validation_end).set_index("account_id")["role"]
+    node_role = pd.Series(names).map(roles).to_numpy()
+    is_mule = node_role == "MULE"
+    if is_mule.sum() == 0:
+        return make_check("C6", "Graph sanity", "WARN", 0.0, "no mules up to the end of validation")
+    share = float((membership[is_mule] == largest).mean())
 
-    degree = pd.Series(graph.degree(), index=names)
-    top = degree[degree >= degree.quantile(0.99)].index
-    role_of = roles.set_index("account_id")["role"]
-    normal_share_top = float((role_of.reindex(top) == "NORMAL").mean())
-
-    status = status_low_is_bad(share, limits["warn"], limits["fail"])
-    if normal_share_top < 0.5:
+    degree = np.array(graph.simplify().degree())
+    hubs = np.argsort(-degree, kind="stable")[:hub_top_n]
+    normal_hubs = int((node_role[hubs] == "NORMAL").sum())
+    status = low_is_bad(share, limits)
+    if normal_hubs == 0:
         status = "FAIL"
-    return check("C6", "Graph sanity", status, round(share, 4),
-                 f"{share:.1%} of mules are in the largest connected part "
-                 f"({len(in_largest):,} of {len(names):,} accounts); {normal_share_top:.1%} of the "
-                 f"top-1% most connected accounts are normal (normal hubs exist)")
+    detail = (f"{share:.0%} of mules are in the largest connected part; "
+              f"{normal_hubs} of the {len(hubs)} best-connected accounts are normal")
+    return make_check("C6", "Graph sanity", status, share, detail)
 
 
-def c7_compatibility(dataset: str) -> dict:
-    features = path("features") / dataset
-    if not features.exists() or not any(features.glob("*.parquet")):
-        return check("C7", "Compatibility", "WARN", None,
-                     "not checked yet: no feature files exist (run again after the feature step)")
-    newest = max(features.glob("[0-9]*.parquet"), key=lambda p: p.stat().st_mtime)
-    df = pd.read_parquet(newest)
-    feature_cols = [c for c in df.columns if c not in ("account_id", "cutoff")]
-    constant = [c for c in feature_cols if df[c].nunique(dropna=True) <= 1]
-    limits = load_settings()["quality_gate"]["c7_constant_features"]
-    status = "FAIL" if len(constant) > limits["fail"] else "WARN" if len(constant) > limits["warn"] else "PASS"
-    return check("C7", "Compatibility", status, len(constant),
-                 f"{len(feature_cols)} features in {newest.name}; constant or empty: {constant or 'none'}")
+# --- C7 Compatibility ---------------------------------------------------------
+
+def check_compatibility(features_folder: Path, limits: dict) -> Check:
+    """C7: every feature column in the saved feature files has real, varying values."""
+    files = [p for p in sorted(features_folder.glob("*.parquet")) if "_rules" not in p.name] \
+        if features_folder.exists() else []
+    if not files:
+        return make_check("C7", "Compatibility", "WARN", 0.0,
+                          "not checked yet: no feature files exist for this dataset (run P4, then rerun the gate)")
+    frames = pd.concat([pd.read_parquet(p) for p in files], ignore_index=True)
+    feature_columns = [col for col in frames.columns if col not in ("account_id", "cutoff")]
+    empty = [col for col in feature_columns if frames[col].isna().all()]
+    constant = [col for col in feature_columns if col not in empty and frames[col].nunique(dropna=True) <= 1]
+    bad = len(empty) + len(constant)
+    status = "FAIL" if empty or bad > limits["fail"] else "WARN" if bad > limits["warn"] else "PASS"
+    detail = f"{len(feature_columns)} features in {len(files)} files; constant: {constant or 'none'}; all empty: {empty or 'none'}"
+    return make_check("C7", "Compatibility", status, bad, detail)
 
 
-def account_table(txns: pd.DataFrame, roles: pd.DataFrame) -> pd.DataFrame:
-    """Simple per-account numbers for C4 and C5; MULE vs NORMAL only."""
-    real = txns[~txns["is_self"]]
-    sent = real.groupby("sender_id").agg(out_degree=("receiver_id", "nunique"), out_amount=("amount", "sum"))
-    received = real.groupby("receiver_id").agg(in_degree=("sender_id", "nunique"), in_amount=("amount", "sum"))
-    both = pd.concat([
-        txns[["sender_id", "channel", "currency_original", "amount"]].rename(columns={"sender_id": "account_id"}),
-        txns[["receiver_id", "channel", "currency_original", "amount"]].rename(columns={"receiver_id": "account_id"}),
-    ])
-    grouped = both.groupby("account_id")
-    table = pd.DataFrame({
-        "main_channel": grouped["channel"].agg(lambda s: s.mode().iat[0]),
-        "main_currency": grouped["currency_original"].agg(lambda s: s.mode().iat[0]),
-        "mean_amount": grouped["amount"].mean(),
-    })
-    table = table.join(sent).join(received).fillna({"out_degree": 0, "in_degree": 0,
-                                                    "out_amount": 0, "in_amount": 0})
-    table["total_amount"] = table["out_amount"] + table["in_amount"]
-    table["bank"] = table.index.str.split("_").str[0]
-    labelled = roles[roles["role"].isin(["MULE", "NORMAL"])].set_index("account_id")
-    table = table.join(labelled["is_mule"], how="inner")
-    table["is_mule"] = table["is_mule"].astype(int)
-    return table
+# --- Report --------------------------------------------------------------------
+
+def run_checks(transactions: pd.DataFrame, labels_txn: pd.DataFrame, account_labels: pd.DataFrame,
+               splits: dict, ingest_counts: dict, features_folder: Path, gate: dict) -> list[Check]:
+    """Run C1 to C7 and return them in order."""
+    return [
+        check_format(transactions, ingest_counts, gate["c1_dropped_rows"]),
+        check_labels(account_labels, gate["c2_min_mules"]),
+        check_time_spread(transactions, account_labels, splits, gate["c3_mules_per_period"],
+                          gate["c3_test_new_share"]),
+        check_giveaway(transactions, labels_txn, account_labels, splits,
+                       gate["c4_single_column_pr_auc"], gate["c4_bins"]),
+        check_overlap(transactions, account_labels, splits, gate["c5_single_threshold_f1"]),
+        check_graph(transactions, account_labels, splits, gate["c6_mules_in_largest_component"],
+                    gate["c6_hub_top_n"]),
+        check_compatibility(features_folder, gate["c7_constant_features"]),
+    ]
 
 
-def write_report(dataset: str, checks: list[dict]) -> Path:
-    overall = max((c["status"] for c in checks), key=ORDER.get)
-    report = {"dataset": dataset, "overall": overall, "checks": checks}
-    out = path("reports")
-    out.mkdir(parents=True, exist_ok=True)
-    (out / f"quality_{dataset}.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
-
+def report_markdown(dataset: str, overall: str, checks: list[Check]) -> str:
+    """The human-readable report card."""
     icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}
-    lines = [f"# Quality report: {dataset}", "", f"**Overall: {icon[overall]} {overall}**", "",
-             "| Check | Status | Value | Detail |", "|---|---|---|---|"]
-    lines += [f"| {c['id']} {c['name']} | {icon[c['status']]} {c['status']} | {c['value']} | {c['detail']} |"
-              for c in checks]
-    lines += ["", "Thresholds: config/settings.yaml `quality_gate`. Meaning of each check: docs/02-DATA.md section 8."]
-    (out / f"quality_{dataset}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return out
+    lines = [f"# Data quality report: {dataset}", "",
+             f"**Overall: {icon[overall]} {overall}**", "",
+             "Label-based checks (C4, C5, C6) use only the train and validation periods.", "",
+             "| # | Check | Status | Value | Detail |", "|---|---|---|---|---|"]
+    lines += [f"| {k['id']} | {k['name']} | {icon[k['status']]} {k['status']} | {k['value']} | {k['detail']} |"
+              for k in checks]
+    return "\n".join(lines) + "\n"
 
 
-def run_quality(dataset: str) -> Path:
-    """Run P2 for one dataset and return the reports folder."""
+def run_quality(dataset: str) -> str:
+    """Run P2 for one dataset, write both report files and return the overall status."""
     started = now_utc()
     settings = load_settings()
-    limits = settings["quality_gate"]
-    seed = settings["random_seed"]
     folder = path("processed") / dataset
+    transactions = pd.read_parquet(folder / c.TRANSACTIONS.filename)
+    labels_txn = pd.read_parquet(folder / c.LABELS_TXN.filename)
+    account_labels = pd.read_parquet(folder / c.ACCOUNT_LABELS.filename)
+    splits = json.loads((folder / c.SPLITS_FILENAME).read_text(encoding="utf-8"))
+    ingest_manifest = folder / "manifest_ingest.json"
+    ingest_counts = json.loads(ingest_manifest.read_text(encoding="utf-8"))["counts"] if ingest_manifest.exists() else {}
 
-    manifest = json.loads((folder / "manifest_ingest.json").read_text(encoding="utf-8"))
-    splits = json.loads((folder / "splits.json").read_text(encoding="utf-8"))
-    txns = pd.read_parquet(folder / "transactions.parquet")
-    txns["is_laundering"] = pd.read_parquet(folder / "labels_txn.parquet", columns=["is_laundering"])["is_laundering"]
-    roles = pd.read_parquet(folder / "account_labels.parquet")
+    checks = run_checks(transactions, labels_txn, account_labels, splits, ingest_counts,
+                        path("features") / dataset, settings["quality_gate"])
+    overall = worst([check["status"] for check in checks])
 
-    print("Building account table ...")
-    accounts = account_table(txns, roles)
-    checks = [c1_format(manifest["counts"], limits["c1_dropped_rows"]),
-              c2_labels(roles["role"], limits["c2_min_mules"]),
-              c3_time_spread(splits["mule_counts"], limits["c3_new_mules_per_period"])]
-    print("C4 giveaway test ...")
-    checks.append(c4_giveaway(txns, accounts, pd.Timestamp(splits["validation_end"]),
-                              limits["c4_single_column_pr_auc"], seed))
-    print("C5 overlap ...")
-    checks.append(c5_overlap(accounts, limits["c5_single_threshold_f1"]))
-    print("C6 graph sanity ...")
-    checks.append(c6_graph(txns, roles, limits["c6_mules_in_largest_component"]))
-    checks.append(c7_compatibility(dataset))
+    reports = path("reports")
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / f"quality_{dataset}.json").write_text(
+        json.dumps({"dataset": dataset, "overall": overall, "checks": checks}, indent=2), encoding="utf-8")
+    (reports / f"quality_{dataset}.md").write_text(report_markdown(dataset, overall, checks), encoding="utf-8")
+    write_manifest(reports, f"quality_{dataset}", started, dataset=dataset, overall=overall,
+                   inputs=[file_info(folder / c.TRANSACTIONS.filename), file_info(folder / c.ACCOUNT_LABELS.filename)])
 
-    out = write_report(dataset, checks)
-    write_manifest(folder, "quality", started, dataset=dataset,
-                   overall=max((c["status"] for c in checks), key=ORDER.get))
-    for c in checks:
-        print(f"[{c['status']:<4}] {c['id']} {c['name']}: {c['detail']}")
-    print(f"Wrote {out / f'quality_{dataset}.md'}")
-    return out
+    for check in checks:
+        print(f"  {check['id']} {check['name']}: {check['status']} ({check['detail']})")
+    print(f"Overall: {overall}")
+    return overall
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="P2 Quality gate")
+    parser = argparse.ArgumentParser(description="P2 Quality gate: report card for one dataset")
     parser.add_argument("--dataset", required=True, help="dataset name from settings.yaml")
     run_quality(parser.parse_args().dataset)
 

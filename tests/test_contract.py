@@ -59,6 +59,8 @@ def test_wrong_enum_value_fails():
         "mule_since": pd.to_datetime(["2022-09-01"]),
         "ring_id": pd.Series([None], dtype="string"),
         "ring_source": pd.Series([None], dtype="string"),
+        "first_laundering_in": pd.to_datetime(["2022-09-01"]),
+        "first_laundering_out": pd.to_datetime(["2022-09-01"]),
     })
     assert not passed(check_dataframe(labels, c.ACCOUNT_LABELS, "a"))
 

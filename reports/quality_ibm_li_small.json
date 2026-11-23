@@ -1,0 +1,55 @@
+{
+  "dataset": "ibm_li_small",
+  "overall": "WARN",
+  "checks": [
+    {
+      "id": "C1",
+      "name": "Format",
+      "status": "PASS",
+      "value": 0.0,
+      "detail": "0.0001% of rows dropped as broken (8 rows); 223 tail rows removed on purpose"
+    },
+    {
+      "id": "C2",
+      "name": "Labels",
+      "status": "PASS",
+      "value": 323.0,
+      "detail": "323 mule, 1,988 source, 2,883 sink, 700,711 normal"
+    },
+    {
+      "id": "C3",
+      "name": "Time spread",
+      "status": "WARN",
+      "value": 91.0,
+      "detail": "mules: 141 train, 91 new in validation, 91 new in test; 58% of the 286 mules active in the test period were not mules in the train period"
+    },
+    {
+      "id": "C4",
+      "name": "Giveaway test",
+      "status": "PASS",
+      "value": 0.004,
+      "detail": "highest one-column PR-AUC: account:bank = 0.004 (fitted on train, scored on validation). All: account:bank 0.004, transaction:channel 0.003, transaction:amount 0.001, account:currency_original 0.001, transaction:sender_bank 0.001, transaction:receiver_bank 0.001, account:amount 0.001, account:channel 0.001, transaction:currency_original 0.001, account:hour 0.001, transaction:hour 0.001"
+    },
+    {
+      "id": "C5",
+      "name": "Overlap",
+      "status": "PASS",
+      "value": 0.0099,
+      "detail": "best one-threshold F1 (data up to end of validation): in_degree 0.004, out_degree 0.010, total_amount 0.003"
+    },
+    {
+      "id": "C6",
+      "name": "Graph sanity",
+      "status": "PASS",
+      "value": 0.9957,
+      "detail": "100% of mules are in the largest connected part; 80 of the 100 best-connected accounts are normal"
+    },
+    {
+      "id": "C7",
+      "name": "Compatibility",
+      "status": "PASS",
+      "value": 0.0,
+      "detail": "41 features in 10 files; constant: none; all empty: none"
+    }
+  ]
+}

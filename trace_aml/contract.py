@@ -5,7 +5,7 @@ This file must match docs/04-CONTRACT.md. Change both together, or neither.
 
 from dataclasses import dataclass
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class Column:
     allowed: tuple[str, ...] | None = None  # for text columns with a fixed list of values
     min_value: float | None = None
     max_value: float | None = None
+    min_exclusive: bool = False  # True = the value must be strictly above min_value
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ TRANSACTIONS = FileSpec(
         Column("timestamp", "datetime64[ns]"),
         Column("sender_id", "string"),
         Column("receiver_id", "string"),
-        Column("amount", "float64", min_value=0),
+        Column("amount", "float64", min_value=0, min_exclusive=True),
         Column("amount_original", "float64", min_value=0),
         Column("currency_original", "string"),
         Column("channel", "string"),
@@ -99,9 +100,17 @@ ACCOUNT_LABELS = FileSpec(
         Column("mule_since", "datetime64[ns]", nullable=True),
         Column("ring_id", "string", nullable=True),
         Column("ring_source", "string", nullable=True, allowed=RING_SOURCES),
+        Column("first_laundering_in", "datetime64[ns]", nullable=True),
+        Column("first_laundering_out", "datetime64[ns]", nullable=True),
     ),
     key=("account_id",),
 )
+
+SPLITS_FILENAME = "splits.json"
+SPLITS_REQUIRED_KEYS = (
+    "dataset", "data_start", "train_end", "validation_end", "test_end", "shares", "mule_counts",
+)
+SPLITS_MULE_COUNT_KEYS = ("train", "validation", "test_new", "test_known")
 
 
 # --- Feature files (docs/04-CONTRACT.md section 4) -----------------------------

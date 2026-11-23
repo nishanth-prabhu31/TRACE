@@ -4,7 +4,7 @@
 |---|---|
 | Doc | 04 of the TRACE doc set |
 | Purpose | The **exact** format of every file and table passed between parts of TRACE. If the pipeline writes it and the app reads it, it is defined here. Lets the data/ML side and the app side be built in parallel and plugged together without surprises |
-| Contract version | **1** |
+| Contract version | **2** |
 | Source of truth in code | `trace_aml/contract.py` must match this doc exactly. Change both together, or neither |
 | Progress | Tracked only in `CHECKLIST.md` |
 
@@ -55,9 +55,13 @@ Folder: `data/processed/<dataset>/`. `<dataset>` is one of: `ibm_hi_small`, `ibm
 | 🔑 `account_id` | string | |
 | `role` | string enum | `MULE`, `SOURCE`, `SINK`, `NORMAL` |
 | `is_mule` | Int8, nullable | 1 = MULE, 0 = NORMAL, empty = SOURCE or SINK (excluded) |
-| `mule_since` | datetime, nullable | First laundering transaction in or out; empty for NORMAL |
+| `mule_since` | datetime, nullable | When the account had both received and sent laundering money; empty unless MULE |
 | `ring_id` | string, nullable | Ring the account belongs to |
 | `ring_source` | string enum, nullable | `PATTERN_FILE` or `CONNECTED` (`02-DATA.md` 5.3) |
+| `first_laundering_in` | datetime, nullable | First laundering transaction received; empty if none |
+| `first_laundering_out` | datetime, nullable | First laundering transaction sent; empty if none |
+
+`role`, `is_mule` and `mule_since` are as of the end of the data. For any earlier time, use `labels_as_of()` on the two `first_laundering_*` columns (`02-DATA.md` 5.5).
 
 ### 2.4 `splits.json`
 ```json
@@ -109,7 +113,7 @@ Folder: `data/features/<dataset>/`.
 | `rule_fan_out` | int8 | 0 / 1 |
 | `rule_cycle` | int8 | 0 / 1 |
 | `rule_pass_through` | int8 | 0 / 1 |
-| `rule_score` | float32 | 0–1, rules-only baseline score (`05` section 3.3) |
+| `rule_score` | float32 | 0–1, plain share of the five rules that fired (no labels). The weighted baseline score is computed in training (`05` section 13) |
 
 ### 4.3 `<cutoff>_rules_evidence.parquet`
 | Column | Type | Meaning |
@@ -188,7 +192,7 @@ A copy of the transactions the run covers (`transactions.parquet` columns, no la
 ### 5.6 `manifest.json`
 ```json
 {
-  "contract_version": 1,
+  "contract_version": 2,
   "run_id": "ibm_hi_small__test__v1",
   "dataset": "ibm_hi_small",
   "kind": "SPLIT",
@@ -305,3 +309,4 @@ Output: a ✅ / ❌ line per check; exit code 0 only if all pass.
 | Version | Change | Date |
 |---|---|---|
 | 1 | First version | |
+| 2 | `account_labels.parquet`: added `first_laundering_in`, `first_laundering_out`; `mule_since` redefined (as-of labels, `02-DATA.md` 5.5). Checker now also checks `splits.json` and enforces `amount` strictly above 0 | 2026-11-14 |
