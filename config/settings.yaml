@@ -1,7 +1,7 @@
 # TRACE settings: every tunable value lives here (docs/03-ARCHITECTURE.md section 6).
 # Change a value here, never in code. Record meaningful changes in the change log of the doc named next to it.
 
-contract_version: 1          # docs/04-CONTRACT.md
+contract_version: 2          # docs/04-CONTRACT.md
 random_seed: 42
 n_seeds: 5                   # docs/05-FEATURES-MODEL.md section 4
 
@@ -27,7 +27,7 @@ datasets:
     raw_dir: data/raw/ibm_li_small
     transactions_file: LI-Small_Trans.csv
     patterns_file: LI-Small_Patterns.txt
-    drop_after: null                    # check the tail when downloaded
+    drop_after: "2022-09-10 23:59:59"   # same sparse tail as HI-Small (02-DATA section 13)
   saml_d:
     raw_dir: data/raw/saml_d
     transactions_file: null             # set when downloaded
@@ -69,8 +69,10 @@ quality_gate:
   c3_mules_per_period: {warn: 30, fail: 10}
   c3_test_new_share: {warn: 0.8, fail: 0.5}
   c4_single_column_pr_auc: {warn: 0.3, fail: 0.8}
+  c4_bins: 50                           # number columns are cut into this many bins
   c5_single_threshold_f1: {warn: 0.5, fail: 0.8}
   c6_mules_in_largest_component: {warn: 0.5, fail: 0.25}
+  c6_hub_top_n: 100                     # "normal hubs exist" = a normal account among the N best-connected
   c7_constant_features: {warn: 0, fail: 3}
 
 # --- Scoring population and training rows (05 sections 1 and 4) --------------
@@ -84,10 +86,11 @@ training:
 features:
   windows_hours: [1, 6, 24]
   pass_through_delta_hours: [1, 24]
+  fan_window_hours: 1                   # window for fan_in_max_1h / fan_out_max_1h
   night_hours: [0, 5]
   round_amount_divisor: 100
   chain: {max_gap_hours: 24, min_keep_share: 0.5, hops: 3}
-  cycle: {min_len: 2, max_len: 4, within_hours: 24}
+  cycle: {min_len: 2, max_len: 4, within_hours: 24, max_branch: 30}   # max_branch: do not search through busier accounts
   betweenness: {enabled: true, cutoff_hops: 3}
   new_counterparty_hours: 24
 
@@ -96,26 +99,35 @@ rules:
   lookback_hours: 24
   pass_through: {min_in_txns: 2, forward_share: 0.9, within_hours: 1}
   fan_in: {min_senders: 5, window_hours: 2, forward_share: 0.8, forward_within_hours: 2}
-  fan_out: {min_receivers: 5, window_hours: 2, funded_within_hours: 2}
+  fan_out: {min_receivers: 5, window_hours: 2, funded_share: 0.8, funded_within_hours: 2}
   chain: {min_hops: 3, hop_within_hours: 1, min_keep_share: 0.7}
-  cycle: {min_len: 2, max_len: 4, within_hours: 24}
+  cycle: {min_len: 2, max_len: 4, within_hours: 24, max_branch: 30}
 
 # --- Models (05 section 5) --------------------------------------------------
 model:
-  lightgbm:
+  version: v1
+  lightgbm:                             # 05 section 13 records why these differ from the first values
     objective: binary
-    learning_rate: 0.05
-    n_estimators: 1000
-    early_stopping_rounds: 50
-    num_leaves: 31
-    min_child_samples: 20
-    feature_fraction: 0.8
+    learning_rate: 0.03
+    n_estimators: 300
+    early_stopping_rounds: 0            # 0 = off: a fixed number of trees (validation PR-AUC per tree is too noisy)
+    num_leaves: 15
+    min_child_samples: 100
+    feature_fraction: 0.5
     bagging_fraction: 0.8
     bagging_freq: 1
     lambda_l1: 0.0
-    lambda_l2: 0.0
+    lambda_l2: 5.0
+    positive_weight: sqrt               # full = negatives / positives, sqrt = its square root, none = 1
+  logreg:
+    max_iter: 1000
   random_forest:
     n_estimators: 300
+    min_samples_leaf: 20
+    max_samples: 0.2                    # each tree sees 20% of the rows (keeps training time reasonable)
+  isolation_forest:
+    n_estimators: 200
+    max_samples: 256
   optuna:
     enabled: false
     n_trials: 50
@@ -162,6 +174,13 @@ app:
   edge_width_px: [1, 8]
   breadcrumb_length: 6
   queue_page_size: 50
+  search_max_matches: 50                # accounts listed when searching by ID on the account page
+  hover_max_txns: 5                     # transfers listed when hovering an arrow
+  graph_height_px: 520
+  node_size_px: [16, 26]                # ordinary account, centre account
+  # Three risk colours, used the same way everywhere; each also has its own shape.
+  verdict_colours: {LIKELY_MULE: "#B03A2E", WATCH: "#CA8A04", NORMAL: "#4B6584"}
+  verdict_shapes: {LIKELY_MULE: triangle, WATCH: diamond, NORMAL: dot}
 
 analysts:                               # PRD F-17: role picker, not security
   - {name: "Analyst A", role: ANALYST}

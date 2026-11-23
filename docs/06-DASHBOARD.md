@@ -196,3 +196,17 @@ How: cache run files with `st.cache_data`; build neighbourhoods from `transactio
 9. **Data quality / Results:** one slide-worth of honesty: quality report card, LightGBM vs baselines, and (if done) caught-in-time and SAML-D numbers.
 
 Backup plan if anything fails live: a screen recording of this exact script, made once the Core is done.
+
+## 14. Change log and verification record
+
+| Item | Status | Finding / change | Date |
+|---|---|---|---|
+| Graph component (5.2) | ✅ verified | `streamlit-agraph` 0.0.45 works with Streamlit 1.66.1 and returns the clicked node; hop, Back and breadcrumb tested in the browser on the fake run. The component is given a new key after every move, so an old click is never replayed after Back | 2026-11-14 |
+| Fallback drawing (5.2) | 🔧 decision | If the component is missing or fails, a static drawing (Streamlit's built-in Graphviz chart) is shown instead of `pyvis`: one dependency fewer. The "Go to account…" dropdown under the graph is always shown, so hopping never depends on the click | 2026-11-14 |
+| Hop from trail and transactions (5.4, 5.5) | 🔧 decision | Trail: a dropdown "Open an account on this trail" (a row of buttons does not fit in the column). Transactions: selecting a row hops to its counterparty | 2026-11-14 |
+| Alert queue row click (4) | 🔧 decision | Selecting a row (checkbox at its left) opens the account | 2026-11-14 |
+| Decision buttons (5.8) | 🔧 decision | Stacked vertically so the labels are never cut off; history times are shown in UTC | 2026-11-14 |
+| **First integration** (10) | ✅ measured | App runs on the real run `ibm_hi_small__test__v1` (5.08M transactions, 354,230 accounts). Overview 1.7 s, alert queue 1.5 s, hop to another account about 0.2 s (targets 2 to 3 s). The first account opened in a run takes about 10 s once, while the network look-up tables are built. Measured through the app test harness, not a stopwatch in the browser | 2026-11-14 |
+| How the app stays fast (10) | 🔧 decision | Run files and network look-up tables are cached as shared read-only resources; account look-ups use binary search on tables sorted by account (`app/logic/neighbourhood.py`). The first version scanned all 5M rows per hop and took 18 s | 2026-11-14 |
+| Account search (5) | 🔧 decision | The account page has a text search listing up to 50 matches; a dropdown of all 354K accounts was too heavy | 2026-11-14 |
+| Theme (9) | 🔧 set | Light base theme in `.streamlit/config.toml`; verdict colours and shapes in `config/settings.yaml` (`app:`) | 2026-11-14 |

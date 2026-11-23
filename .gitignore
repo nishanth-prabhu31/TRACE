@@ -8,10 +8,13 @@ data/raw/
 data/processed/
 data/features/
 data/runs/
-models/
+/models/
 trace.db
 
 # Notebook checkpoints and editor files
 .ipynb_checkpoints/
 .vscode/
 .DS_Store
+
+# Fake run for app work: rebuilt by scripts/make_fake_data.py
+data/fake/runs/

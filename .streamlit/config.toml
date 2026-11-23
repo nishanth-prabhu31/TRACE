@@ -1,0 +1,7 @@
+# Interim look until the final visual design (docs/06-DASHBOARD.md section 9).
+[theme]
+base = "light"
+primaryColor = "#2C3E50"
+
+[browser]
+gatherUsageStats = false

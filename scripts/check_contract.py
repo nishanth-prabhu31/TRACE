@@ -77,8 +77,11 @@ def check_dataframe(df: pd.DataFrame, spec: c.FileSpec, label: str) -> list[Resu
             bad = sorted(set(values.astype(str)) - set(col.allowed))
             if bad:
                 results.append((False, f"{where}: values not allowed {bad[:5]}"))
-        if col.min_value is not None and (values < col.min_value).any():
-            results.append((False, f"{where}: values below {col.min_value}"))
+        if col.min_value is not None:
+            too_low = values <= col.min_value if col.min_exclusive else values < col.min_value
+            if too_low.any():
+                rule = "must be above" if col.min_exclusive else "values below"
+                results.append((False, f"{where}: {rule} {col.min_value}"))
         if col.max_value is not None and (values > col.max_value).any():
             results.append((False, f"{where}: values above {col.max_value}"))
 
@@ -104,7 +107,22 @@ def check_processed(folder: Path) -> list[Result]:
     for spec in (c.LABELS_TXN, c.ACCOUNT_LABELS):
         if (folder / spec.filename).exists():
             results += _check_file(folder / spec.filename, spec)
+    if (folder / c.SPLITS_FILENAME).exists():
+        results.append(check_splits(folder / c.SPLITS_FILENAME))
     return results
+
+
+def check_splits(path: Path) -> Result:
+    """Check splits.json has every key and its period ends are in time order."""
+    splits = json.loads(path.read_text(encoding="utf-8"))
+    missing = [key for key in c.SPLITS_REQUIRED_KEYS if key not in splits]
+    missing += [f"mule_counts.{key}" for key in c.SPLITS_MULE_COUNT_KEYS
+                if key not in splits.get("mule_counts", {})]
+    if missing:
+        return False, f"{path.name}: missing keys {missing}"
+    ends = [splits[key] for key in ("data_start", "train_end", "validation_end", "test_end")]
+    ordered = ends == sorted(ends) and len(set(ends)) == len(ends)
+    return ordered, f"{path.name}: all keys present, period ends " + ("in order" if ordered else "NOT in time order")
 
 
 def check_features(folder: Path) -> list[Result]:
