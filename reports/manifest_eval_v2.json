@@ -1,0 +1,11 @@
+{
+  "step": "eval_v2",
+  "contract_version": 2,
+  "settings_hash": "9001908dbb0b",
+  "random_seed": 42,
+  "started_at": "2026-11-24T11:00:05Z",
+  "finished_at": "2026-11-24T11:39:17Z",
+  "dataset": "ibm_hi_small",
+  "model_version": "v2",
+  "n_seeds": 5
+}

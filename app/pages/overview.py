@@ -16,6 +16,11 @@ def open_demo_run(run_id: str) -> None:
 
 demo_runs = [run for run in st.session_state.get("runs", {}).values() if run.get("kind") == "DEMO"]
 if demo_runs:
+    # Prefer the demo run of the active model version (F-14 keeps one demo run per version).
+    from app.logic import data_access
+    from app.shared import database
+    active = data_access.get_state(database(), data_access.ACTIVE_MODEL_KEY)
+    demo_runs.sort(key=lambda run: run.get("model_version") != active)
     st.button("Open demo run", on_click=open_demo_run, args=(demo_runs[0]["run_id"],))
 
 run = current_run()

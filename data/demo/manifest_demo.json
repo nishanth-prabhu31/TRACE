@@ -1,0 +1,44 @@
+{
+  "step": "demo",
+  "contract_version": 2,
+  "settings_hash": "9001908dbb0b",
+  "random_seed": 42,
+  "started_at": "2026-11-24T11:08:41Z",
+  "finished_at": "2026-11-24T11:09:08Z",
+  "run": "C:\\Users\\nisha\\Desktop\\Claude playground\\aiml pbl\\data\\runs\\demo__demo__v2",
+  "dataset": "ibm_hi_small",
+  "pattern_id": "P-0342",
+  "pattern_type": "RANDOM",
+  "pattern_accounts": 5,
+  "extra_patterns": [
+    "P-0295",
+    "P-0302",
+    "P-0300",
+    "P-0306"
+  ],
+  "accounts": 229,
+  "transactions": 644,
+  "laundering_rows": 34,
+  "window": [
+    "2022-09-09 00:00:00",
+    "2022-09-11 00:00:00"
+  ],
+  "display_rate": 96.0,
+  "outputs": {
+    "transactions": {
+      "file": "demo_transactions.csv",
+      "bytes": 37480,
+      "modified": "2026-11-24T11:09:05Z"
+    },
+    "labels": {
+      "file": "demo_labels.csv",
+      "bytes": 11420,
+      "modified": "2026-11-24T11:09:05Z"
+    },
+    "account_map": {
+      "file": "demo_account_map.csv",
+      "bytes": 9305,
+      "modified": "2026-11-24T11:09:06Z"
+    }
+  }
+}

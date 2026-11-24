@@ -1,22 +1,22 @@
 {
   "step": "quality_ibm_hi_small",
   "contract_version": 2,
-  "settings_hash": "e66689d76fe1",
+  "settings_hash": "f0b9e25c49e7",
   "random_seed": 42,
-  "started_at": "2026-11-14T10:34:40Z",
-  "finished_at": "2026-11-14T10:37:06Z",
+  "started_at": "2026-11-23T10:32:46Z",
+  "finished_at": "2026-11-23T10:33:48Z",
   "dataset": "ibm_hi_small",
   "overall": "WARN",
   "inputs": [
     {
       "file": "transactions.parquet",
       "bytes": 199744185,
-      "modified": "2026-11-14T08:27:43Z"
+      "modified": "2026-11-23T10:32:34Z"
     },
     {
       "file": "account_labels.parquet",
       "bytes": 4550387,
-      "modified": "2026-11-14T08:27:49Z"
+      "modified": "2026-11-23T10:32:41Z"
     }
   ]
 }

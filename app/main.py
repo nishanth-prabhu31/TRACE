@@ -65,6 +65,8 @@ pages = [
     st.Page("pages/overview.py", title="Overview", default=True),
     st.Page("pages/alert_queue.py", title="Alert queue"),
     st.Page("pages/account.py", title="Account investigation"),
+    st.Page("pages/rings.py", title="Rings"),
+    st.Page("pages/models.py", title="Models"),
     st.Page("pages/data_quality.py", title="Data quality"),
 ]
 st.navigation(pages).run()

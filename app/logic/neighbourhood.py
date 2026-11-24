@@ -117,6 +117,28 @@ def build_neighbourhood(network: dict, scores: pd.DataFrame, trails: pd.DataFram
     return {"nodes": nodes, "edges": shown_edges, "hidden": len(candidates) - len(kept)}
 
 
+def build_ring_graph(network: dict, scores: pd.DataFrame, members: list[str], max_nodes: int,
+                     hover_max_txns: int) -> dict:
+    """Nodes and merged arrows for one ring: only its members and the money between them
+    (docs/06-DASHBOARD.md section 7). Big rings keep their `max_nodes` riskiest members."""
+    known = scores.reindex(members)
+    shown = known["risk"].sort_values(ascending=False, kind="stable").index[:max_nodes].tolist()
+    between = edges_touching(network, shown)
+    edges = between[between["sender_id"].isin(shown) & between["receiver_id"].isin(shown)].reset_index(drop=True)
+    detail = rows_for(network, "transfers", shown)
+    detail = detail[detail["receiver_id"].isin(shown)].sort_values("timestamp")
+    samples = {pair: group[["timestamp", "amount"]].head(hover_max_txns).to_dict("records")
+               for pair, group in detail.groupby(["sender_id", "receiver_id"], sort=False)}
+    edges["sample"] = [samples.get(pair, []) for pair in zip(edges["sender_id"], edges["receiver_id"])]
+    nodes = pd.DataFrame({"account_id": shown})
+    nodes["is_centre"] = False
+    nodes["on_trail"] = False
+    for column in ("risk", "verdict", "short_label", "n_txn", "in_amount", "out_amount"):
+        nodes[column] = known[column].reindex(shown).to_numpy()
+    nodes["has_score"] = nodes["verdict"].notna()
+    return {"nodes": nodes, "edges": edges, "hidden": len(members) - len(shown)}
+
+
 def account_transfers(network: dict, account_id: str) -> pd.DataFrame:
     """One account's transfers with other accounts, newest first, with direction and counterparty."""
     sent = rows_for(network, "transfers", [account_id]).assign(direction="out")

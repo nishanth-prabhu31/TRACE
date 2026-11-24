@@ -49,6 +49,13 @@ def choose_cuts(validation_target: np.ndarray, validation_risk: np.ndarray, verd
 
     enough = np.flatnonzero(recall >= verdicts["watch_min_recall"])
     watch = float(cuts[enough[0]]) if len(enough) else 0.0
+    # Analyst capacity: WATCH + LIKELY_MULE may cover at most `watch_max_share` of accounts.
+    # The stricter of the two rules wins (docs/05-FEATURES-MODEL.md section 13).
+    max_share = verdicts.get("watch_max_share")
+    if max_share:
+        fits = np.flatnonzero(flagged_at <= max_share * len(risk))
+        if len(fits):
+            watch = max(watch, float(cuts[fits[-1]]))
     if watch >= likely:
         watch = max(likely - verdicts["watch_fallback_gap"], 0.0)
     return {"likely_mule_cut": likely, "watch_cut": watch, "precision_target_met": bool(reaches.any())}

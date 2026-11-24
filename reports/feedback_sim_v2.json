@@ -1,0 +1,41 @@
+{
+  "dataset": "ibm_hi_small",
+  "alerts_per_round": 50,
+  "rounds": 3,
+  "seed": 42,
+  "feedback_from": "VALIDATION period only (evaluation-safe)",
+  "results": [
+    {
+      "round": 0,
+      "feedback_rows": 0,
+      "pr_auc": 0.3318,
+      "precision_at_50": 0.8,
+      "precision_at_100": 0.55,
+      "recall_at_500": 0.4653
+    },
+    {
+      "round": 1,
+      "feedback_rows": 50,
+      "pr_auc": 0.336,
+      "precision_at_50": 0.82,
+      "precision_at_100": 0.55,
+      "recall_at_500": 0.4554
+    },
+    {
+      "round": 2,
+      "feedback_rows": 100,
+      "pr_auc": 0.3654,
+      "precision_at_50": 0.86,
+      "precision_at_100": 0.64,
+      "recall_at_500": 0.4752
+    },
+    {
+      "round": 3,
+      "feedback_rows": 150,
+      "pr_auc": 0.3607,
+      "precision_at_50": 0.86,
+      "precision_at_100": 0.65,
+      "recall_at_500": 0.4604
+    }
+  ]
+}

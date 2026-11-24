@@ -78,12 +78,16 @@ def judged(accounts: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     return (counted["group"] == NEW_MULE).to_numpy(dtype="int8"), counted["score"].to_numpy(dtype="float64")
 
 
-def run_train(dataset: str) -> Path:
-    """Fit, calibrate and save the main model; return its folder."""
+def run_train(dataset: str, data: dict | None = None, version: str | None = None,
+              meta_extra: dict | None = None) -> Path:
+    """Fit, calibrate and save the main model; return its folder.
+
+    Retraining (F-14) passes its own `data` (train rows with feedback added), a new
+    `version` and `meta_extra` (parent, feedback used, eval_valid)."""
     started, clock = now_utc(), time.perf_counter()
     settings = load_settings()
-    version = settings["model"]["version"]
-    data = load_training_data(dataset, settings)
+    version = version or settings["model"]["version"]
+    data = data or load_training_data(dataset, settings)
     columns = full_columns(data["train"])
     print(f"Train rows: {len(data['train']):,} ({int(data['target'].sum()):,} mule rows), {len(columns)} features")
 
@@ -124,6 +128,7 @@ def run_train(dataset: str) -> Path:
         "rule_weights": rules.weights,
         "training_seconds": round(time.perf_counter() - clock, 1),
         "created_at": now_utc(),
+        **(meta_extra or {}),
     }
     (folder / "meta.json").write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
     write_manifest(folder, "train", started, dataset=dataset, model_version=version)

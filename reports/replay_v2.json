@@ -1,0 +1,714 @@
+{
+  "dataset": "ibm_hi_small",
+  "model_version": "v2",
+  "step_hours": 1,
+  "ring_definition": "PATTERN_FILE (complete attempts only)",
+  "likely_mule_cut": 40.0,
+  "rings": 73,
+  "caught_before_cashout": 55,
+  "caught_after_cashout": 5,
+  "never_caught": 13,
+  "share_before_cashout": 0.7534,
+  "lead_minutes_median": 1062.0,
+  "lead_minutes_p25_p75": [
+    633.5,
+    1906.0
+  ],
+  "strict_caught_after_start_before_cashout": 37,
+  "strict_share": 0.5068,
+  "strict_lead_minutes_median": 1138.0,
+  "alert_before_ring_start": 18,
+  "by_pattern": {
+    "BIPARTITE": {
+      "rings": 11,
+      "before": 6
+    },
+    "CYCLE": {
+      "rings": 11,
+      "before": 9
+    },
+    "FAN_IN": {
+      "rings": 6,
+      "before": 4
+    },
+    "FAN_OUT": {
+      "rings": 9,
+      "before": 5
+    },
+    "GATHER_SCATTER": {
+      "rings": 9,
+      "before": 9
+    },
+    "RANDOM": {
+      "rings": 8,
+      "before": 7
+    },
+    "SCATTER_GATHER": {
+      "rings": 6,
+      "before": 6
+    },
+    "STACK": {
+      "rings": 13,
+      "before": 9
+    }
+  },
+  "rings_table": [
+    {
+      "pattern_id": "P-0031",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "23",
+      "start": "2022-09-01 14:33:00",
+      "cashout": "2022-09-09 08:29:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "449.0"
+    },
+    {
+      "pattern_id": "P-0047",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "27",
+      "start": "2022-09-02 01:32:00",
+      "cashout": "2022-09-09 17:14:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "974.0"
+    },
+    {
+      "pattern_id": "P-0080",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "25",
+      "start": "2022-09-02 23:18:00",
+      "cashout": "2022-09-10 11:00:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2040.0"
+    },
+    {
+      "pattern_id": "P-0082",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "20",
+      "start": "2022-09-03 01:13:00",
+      "cashout": "2022-09-10 13:24:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2184.0"
+    },
+    {
+      "pattern_id": "P-0092",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "22",
+      "start": "2022-09-03 05:28:00",
+      "cashout": "2022-09-10 02:09:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1509.0"
+    },
+    {
+      "pattern_id": "P-0094",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "25",
+      "start": "2022-09-03 06:08:00",
+      "cashout": "2022-09-09 04:19:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "199.0"
+    },
+    {
+      "pattern_id": "P-0141",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "4",
+      "start": "2022-09-04 18:56:00",
+      "cashout": "2022-09-10 17:33:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2433.0"
+    },
+    {
+      "pattern_id": "P-0142",
+      "pattern_type": "STACK",
+      "members": "42",
+      "start": "2022-09-04 21:58:00",
+      "cashout": "2022-09-09 12:07:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "667.0"
+    },
+    {
+      "pattern_id": "P-0145",
+      "pattern_type": "STACK",
+      "members": "2",
+      "start": "2022-09-06 13:42:00",
+      "cashout": "2022-09-09 09:36:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "516.0"
+    },
+    {
+      "pattern_id": "P-0146",
+      "pattern_type": "STACK",
+      "members": "24",
+      "start": "2022-09-05 12:23:00",
+      "cashout": "2022-09-09 04:07:00",
+      "first_alert": "2022-09-10 03:00:00",
+      "lead_minutes": "-1373.0"
+    },
+    {
+      "pattern_id": "P-0167",
+      "pattern_type": "CYCLE",
+      "members": "3",
+      "start": "2022-09-05 12:32:00",
+      "cashout": "2022-09-09 05:17:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "257.0"
+    },
+    {
+      "pattern_id": "P-0170",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "14",
+      "start": "2022-09-05 15:53:00",
+      "cashout": "2022-09-09 14:48:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "828.0"
+    },
+    {
+      "pattern_id": "P-0176",
+      "pattern_type": "STACK",
+      "members": "39",
+      "start": "2022-09-05 20:29:00",
+      "cashout": "2022-09-10 02:03:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1503.0"
+    },
+    {
+      "pattern_id": "P-0179",
+      "pattern_type": "RANDOM",
+      "members": "9",
+      "start": "2022-09-05 19:55:00",
+      "cashout": "2022-09-09 14:25:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0182",
+      "pattern_type": "CYCLE",
+      "members": "10",
+      "start": "2022-09-05 22:55:00",
+      "cashout": "2022-09-09 18:03:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1023.0"
+    },
+    {
+      "pattern_id": "P-0186",
+      "pattern_type": "STACK",
+      "members": "36",
+      "start": "2022-09-06 06:25:00",
+      "cashout": "2022-09-09 06:27:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "327.0"
+    },
+    {
+      "pattern_id": "P-0187",
+      "pattern_type": "FAN_IN",
+      "members": "16",
+      "start": "2022-09-06 02:29:00",
+      "cashout": "2022-09-10 02:05:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1505.0"
+    },
+    {
+      "pattern_id": "P-0189",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "2",
+      "start": "2022-09-06 02:26:00",
+      "cashout": "2022-09-09 11:21:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "621.0"
+    },
+    {
+      "pattern_id": "P-0191",
+      "pattern_type": "STACK",
+      "members": "21",
+      "start": "2022-09-06 12:26:00",
+      "cashout": "2022-09-09 19:58:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1138.0"
+    },
+    {
+      "pattern_id": "P-0192",
+      "pattern_type": "RANDOM",
+      "members": "9",
+      "start": "2022-09-06 03:39:00",
+      "cashout": "2022-09-09 17:38:00",
+      "first_alert": "2022-09-09 13:00:00",
+      "lead_minutes": "278.0"
+    },
+    {
+      "pattern_id": "P-0193",
+      "pattern_type": "CYCLE",
+      "members": "8",
+      "start": "2022-09-06 04:09:00",
+      "cashout": "2022-09-09 07:13:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "373.0"
+    },
+    {
+      "pattern_id": "P-0195",
+      "pattern_type": "STACK",
+      "members": "9",
+      "start": "2022-09-06 13:23:00",
+      "cashout": "2022-09-10 06:42:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1782.0"
+    },
+    {
+      "pattern_id": "P-0198",
+      "pattern_type": "STACK",
+      "members": "15",
+      "start": "2022-09-06 12:02:00",
+      "cashout": "2022-09-09 15:52:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0199",
+      "pattern_type": "FAN_OUT",
+      "members": "8",
+      "start": "2022-09-06 09:32:00",
+      "cashout": "2022-09-10 04:29:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1649.0"
+    },
+    {
+      "pattern_id": "P-0205",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "15",
+      "start": "2022-09-06 12:50:00",
+      "cashout": "2022-09-10 12:19:00",
+      "first_alert": "2022-09-09 20:00:00",
+      "lead_minutes": "979.0"
+    },
+    {
+      "pattern_id": "P-0206",
+      "pattern_type": "RANDOM",
+      "members": "9",
+      "start": "2022-09-06 13:46:00",
+      "cashout": "2022-09-10 09:20:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1940.0"
+    },
+    {
+      "pattern_id": "P-0208",
+      "pattern_type": "FAN_OUT",
+      "members": "5",
+      "start": "2022-09-06 14:12:00",
+      "cashout": "2022-09-09 21:55:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0210",
+      "pattern_type": "STACK",
+      "members": "24",
+      "start": "2022-09-06 19:45:00",
+      "cashout": "2022-09-10 08:39:00",
+      "first_alert": "2022-09-09 05:00:00",
+      "lead_minutes": "1659.0"
+    },
+    {
+      "pattern_id": "P-0211",
+      "pattern_type": "FAN_IN",
+      "members": "12",
+      "start": "2022-09-06 17:05:00",
+      "cashout": "2022-09-10 07:47:00",
+      "first_alert": "2022-09-10 11:00:00",
+      "lead_minutes": "-193.0"
+    },
+    {
+      "pattern_id": "P-0212",
+      "pattern_type": "FAN_OUT",
+      "members": "17",
+      "start": "2022-09-06 17:08:00",
+      "cashout": "2022-09-09 18:33:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0213",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "10",
+      "start": "2022-09-06 17:24:00",
+      "cashout": "2022-09-10 15:43:00",
+      "first_alert": "2022-09-09 02:00:00",
+      "lead_minutes": "2263.0"
+    },
+    {
+      "pattern_id": "P-0216",
+      "pattern_type": "FAN_OUT",
+      "members": "14",
+      "start": "2022-09-06 19:16:00",
+      "cashout": "2022-09-10 00:26:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1406.0"
+    },
+    {
+      "pattern_id": "P-0218",
+      "pattern_type": "CYCLE",
+      "members": "12",
+      "start": "2022-09-06 19:29:00",
+      "cashout": "2022-09-10 18:52:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2512.0"
+    },
+    {
+      "pattern_id": "P-0219",
+      "pattern_type": "FAN_OUT",
+      "members": "17",
+      "start": "2022-09-06 19:15:00",
+      "cashout": "2022-09-10 11:51:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0221",
+      "pattern_type": "RANDOM",
+      "members": "11",
+      "start": "2022-09-06 21:22:00",
+      "cashout": "2022-09-10 13:25:00",
+      "first_alert": "2022-09-09 07:00:00",
+      "lead_minutes": "1825.0"
+    },
+    {
+      "pattern_id": "P-0223",
+      "pattern_type": "CYCLE",
+      "members": "4",
+      "start": "2022-09-06 23:41:00",
+      "cashout": "2022-09-10 17:11:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0226",
+      "pattern_type": "STACK",
+      "members": "33",
+      "start": "2022-09-07 02:40:00",
+      "cashout": "2022-09-10 16:48:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2388.0"
+    },
+    {
+      "pattern_id": "P-0227",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "5",
+      "start": "2022-09-07 02:25:00",
+      "cashout": "2022-09-10 14:15:00",
+      "first_alert": "2022-09-10 14:00:00",
+      "lead_minutes": "15.0"
+    },
+    {
+      "pattern_id": "P-0230",
+      "pattern_type": "CYCLE",
+      "members": "4",
+      "start": "2022-09-07 03:44:00",
+      "cashout": "2022-09-10 22:20:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2720.0"
+    },
+    {
+      "pattern_id": "P-0234",
+      "pattern_type": "BIPARTITE",
+      "members": "16",
+      "start": "2022-09-07 09:03:00",
+      "cashout": "2022-09-09 05:28:00",
+      "first_alert": "2022-09-10 19:00:00",
+      "lead_minutes": "-2252.0"
+    },
+    {
+      "pattern_id": "P-0235",
+      "pattern_type": "STACK",
+      "members": "2",
+      "start": "2022-09-07 11:33:00",
+      "cashout": "2022-09-09 00:25:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "-35.0"
+    },
+    {
+      "pattern_id": "P-0237",
+      "pattern_type": "FAN_OUT",
+      "members": "7",
+      "start": "2022-09-07 07:34:00",
+      "cashout": "2022-09-10 18:47:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0242",
+      "pattern_type": "BIPARTITE",
+      "members": "26",
+      "start": "2022-09-07 12:01:00",
+      "cashout": "2022-09-09 03:05:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0243",
+      "pattern_type": "FAN_OUT",
+      "members": "3",
+      "start": "2022-09-07 10:23:00",
+      "cashout": "2022-09-10 00:18:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1398.0"
+    },
+    {
+      "pattern_id": "P-0245",
+      "pattern_type": "BIPARTITE",
+      "members": "24",
+      "start": "2022-09-07 14:45:00",
+      "cashout": "2022-09-09 14:11:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0246",
+      "pattern_type": "CYCLE",
+      "members": "3",
+      "start": "2022-09-07 16:22:00",
+      "cashout": "2022-09-09 03:58:00",
+      "first_alert": "2022-09-09 04:00:00",
+      "lead_minutes": "-2.0"
+    },
+    {
+      "pattern_id": "P-0249",
+      "pattern_type": "CYCLE",
+      "members": "5",
+      "start": "2022-09-07 18:08:00",
+      "cashout": "2022-09-10 01:24:00",
+      "first_alert": "2022-09-09 21:00:00",
+      "lead_minutes": "264.0"
+    },
+    {
+      "pattern_id": "P-0257",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-09 13:51:00",
+      "cashout": "2022-09-09 13:51:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "771.0"
+    },
+    {
+      "pattern_id": "P-0261",
+      "pattern_type": "STACK",
+      "members": "2",
+      "start": "2022-09-09 19:10:00",
+      "cashout": "2022-09-10 14:01:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2221.0"
+    },
+    {
+      "pattern_id": "P-0263",
+      "pattern_type": "CYCLE",
+      "members": "2",
+      "start": "2022-09-08 01:32:00",
+      "cashout": "2022-09-09 09:47:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "527.0"
+    },
+    {
+      "pattern_id": "P-0265",
+      "pattern_type": "BIPARTITE",
+      "members": "26",
+      "start": "2022-09-08 05:14:00",
+      "cashout": "2022-09-09 16:53:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0267",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-09 10:53:00",
+      "cashout": "2022-09-09 10:53:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "593.0"
+    },
+    {
+      "pattern_id": "P-0268",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-10 02:11:00",
+      "cashout": "2022-09-10 02:11:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1511.0"
+    },
+    {
+      "pattern_id": "P-0276",
+      "pattern_type": "CYCLE",
+      "members": "2",
+      "start": "2022-09-08 13:29:00",
+      "cashout": "2022-09-10 08:12:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1872.0"
+    },
+    {
+      "pattern_id": "P-0278",
+      "pattern_type": "BIPARTITE",
+      "members": "18",
+      "start": "2022-09-08 17:05:00",
+      "cashout": "2022-09-10 11:43:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0286",
+      "pattern_type": "FAN_IN",
+      "members": "3",
+      "start": "2022-09-08 20:43:00",
+      "cashout": "2022-09-10 14:15:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0287",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-09 11:07:00",
+      "cashout": "2022-09-09 11:07:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "607.0"
+    },
+    {
+      "pattern_id": "P-0289",
+      "pattern_type": "FAN_IN",
+      "members": "3",
+      "start": "2022-09-08 23:38:00",
+      "cashout": "2022-09-09 11:46:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "646.0"
+    },
+    {
+      "pattern_id": "P-0292",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-10 18:49:00",
+      "cashout": "2022-09-10 18:49:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2509.0"
+    },
+    {
+      "pattern_id": "P-0301",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "2",
+      "start": "2022-09-09 08:27:00",
+      "cashout": "2022-09-09 15:01:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "841.0"
+    },
+    {
+      "pattern_id": "P-0303",
+      "pattern_type": "BIPARTITE",
+      "members": "2",
+      "start": "2022-09-09 13:57:00",
+      "cashout": "2022-09-09 13:57:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "777.0"
+    },
+    {
+      "pattern_id": "P-0310",
+      "pattern_type": "FAN_IN",
+      "members": "2",
+      "start": "2022-09-09 14:15:00",
+      "cashout": "2022-09-09 14:15:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "795.0"
+    },
+    {
+      "pattern_id": "P-0311",
+      "pattern_type": "FAN_IN",
+      "members": "2",
+      "start": "2022-09-09 15:15:00",
+      "cashout": "2022-09-09 15:15:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "855.0"
+    },
+    {
+      "pattern_id": "P-0312",
+      "pattern_type": "FAN_OUT",
+      "members": "2",
+      "start": "2022-09-09 15:30:00",
+      "cashout": "2022-09-09 15:30:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "870.0"
+    },
+    {
+      "pattern_id": "P-0315",
+      "pattern_type": "RANDOM",
+      "members": "2",
+      "start": "2022-09-09 17:07:00",
+      "cashout": "2022-09-09 17:07:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "967.0"
+    },
+    {
+      "pattern_id": "P-0318",
+      "pattern_type": "FAN_OUT",
+      "members": "2",
+      "start": "2022-09-09 18:42:00",
+      "cashout": "2022-09-09 18:42:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1062.0"
+    },
+    {
+      "pattern_id": "P-0322",
+      "pattern_type": "GATHER_SCATTER",
+      "members": "2",
+      "start": "2022-09-09 19:55:00",
+      "cashout": "2022-09-09 21:14:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1214.0"
+    },
+    {
+      "pattern_id": "P-0328",
+      "pattern_type": "STACK",
+      "members": "3",
+      "start": "2022-09-10 14:56:00",
+      "cashout": "2022-09-10 18:17:00",
+      "first_alert": NaN,
+      "lead_minutes": NaN
+    },
+    {
+      "pattern_id": "P-0335",
+      "pattern_type": "CYCLE",
+      "members": "2",
+      "start": "2022-09-10 02:59:00",
+      "cashout": "2022-09-10 12:07:00",
+      "first_alert": "2022-09-10 03:00:00",
+      "lead_minutes": "547.0"
+    },
+    {
+      "pattern_id": "P-0336",
+      "pattern_type": "SCATTER_GATHER",
+      "members": "2",
+      "start": "2022-09-10 02:52:00",
+      "cashout": "2022-09-10 10:03:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "1983.0"
+    },
+    {
+      "pattern_id": "P-0351",
+      "pattern_type": "RANDOM",
+      "members": "2",
+      "start": "2022-09-10 14:37:00",
+      "cashout": "2022-09-10 14:37:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2257.0"
+    },
+    {
+      "pattern_id": "P-0364",
+      "pattern_type": "RANDOM",
+      "members": "2",
+      "start": "2022-09-10 19:51:00",
+      "cashout": "2022-09-10 19:51:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2571.0"
+    },
+    {
+      "pattern_id": "P-0369",
+      "pattern_type": "RANDOM",
+      "members": "2",
+      "start": "2022-09-10 22:42:00",
+      "cashout": "2022-09-10 22:42:00",
+      "first_alert": "2022-09-09 01:00:00",
+      "lead_minutes": "2742.0"
+    }
+  ]
+}

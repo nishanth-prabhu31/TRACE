@@ -71,6 +71,15 @@ def test_cut_offs_and_verdicts():
     assert verdict_for(np.array([95.0, 40.0, 5.0]), cuts).tolist() == ["LIKELY_MULE", "WATCH", "NORMAL"]
 
 
+def test_watch_cut_respects_analyst_capacity():
+    risk = np.array([90.0] * 2 + [40.0] * 6 + [10.0] * 20 + [1.0] * 72)
+    target = np.array([1, 1] + [1] + [0] * 5 + [1] * 4 + [0] * 16 + [0] * 72)
+    loose = choose_cuts(target, risk, VERDICTS)
+    assert loose["likely_mule_cut"] == 90.0 and loose["watch_cut"] == 10.0    # 80% recall needs the 10s: 28 flagged
+    capped = choose_cuts(target, risk, {**VERDICTS, "watch_max_share": 0.08})
+    assert capped["watch_cut"] == 40.0                                        # at most 8 of 100 flagged
+
+
 def test_cut_off_falls_back_to_best_f1_when_precision_is_never_reached():
     risk = np.array([30.0] * 10 + [1.0] * 90)
     target = np.array([1, 1] + [0] * 8 + [0] * 90)

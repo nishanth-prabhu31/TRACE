@@ -34,8 +34,9 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [x] F-06 LightGBM main model (FM §5); settings changed, FM §13 — 2026-11-14 NP
 - [x] Evaluation report, 5 seeds, HI-Small + LI-Small (FM §7): `reports/eval_v1.md`, `reports/eval_v1_ibm_li_small.md`; LI-Small is much weaker (FM §13) — 2026-11-14 NP
 - [x] Minimum bar met: LightGBM beats RULES and TXN_ONLY on PR-AUC (PRD §9): test PR-AUC 0.165 vs 0.0011 and 0.081 (HI-Small, synthetic, 5 seeds); note Random Forest 0.276 beats LightGBM — 2026-11-14 NP
-- [ ] Numeric targets set from first results; recorded in FM §13
-- [ ] Try the stronger-regularised LightGBM from branch `nishanth-pipeline` (FM §13) on this pipeline; keep only if validation PR-AUC improves
+- [x] Numeric targets set from first results; recorded in FM §13 — 3 of 4 met on test (LIKELY_MULE precision 0.41 < 0.5) — 2026-11-24 NP
+- [x] Try the stronger-regularised LightGBM from branch `nishanth-pipeline` (FM §13) on this pipeline; keep only if validation PR-AUC improves — kept as model v2 (validation PR-AUC 0.18 → 0.40) — 2026-11-24 NP
+- [x] F-07 WATCH cut: analyst-capacity cap `watch_max_share` 0.5% (FM §13); test WATCH 23,158 → 1,693 — 2026-11-24 NP
 - [x] Ablations (FM §5.1) — 2026-11-14 NP
 - [~] F-07 Calibration + verdict cut-offs (FM §6.1–6.2): done and tested; WATCH rule gives 23K accounts, needs a team decision (FM §13)
 - [x] F-08 SHAP reasons (FM §6.3) — 2026-11-14 NP
@@ -57,17 +58,17 @@ Rules: `AGENTS.md` section 3. Owners: `WORKSPLIT.md` (A = data + model, B = dash
 - [~] Performance targets met (DASH §10): open/hop/queue met on the real run (DASH §14); first account open per run takes ~10 s once; upload target not measured (upload not built)
 
 ## 4. Demo (Core)
-- [ ] F-11 Demo data file from IBM test slice, ₹ / UPI restyled (DATA §10)
-- [ ] Pre-scored demo run + "Open demo run" button
+- [x] F-11 Demo data file from IBM test slice, ₹ / UPI restyled (DATA §10) — 2026-11-23 NP
+- [x] Pre-scored demo run + "Open demo run" button — `demo__demo__v2`, checked in the browser — 2026-11-24 NP
 - [ ] Demo script rehearsed (DASH §13); backup screen recording made
 - [ ] **CORE DONE**
 
 ## 5. Layer 2
-- [ ] F-12 Replay + lead time report (FM §8)
-- [ ] F-13 Rings: pipeline step + screen (ARCH P10, DASH §7)
-- [ ] F-14 Retrain path + model versions + Models screen (ARCH §3.2, DASH §8)
-- [ ] Feedback evaluation with simulated analyst, 3 rounds (FM §11)
-- [ ] F-18 UPI-style stress test: inject fast ₹ mule rings into IBM normal background; compare model vs rules vs model+rules on them (stress test only, never trained on, never the headline result; PRD §5)
+- [x] F-12 Replay + lead time report (FM §8) — 75% of 73 rings before cash-out (strict 51%), median lead ~18 h — 2026-11-24 NP
+- [x] F-13 Rings: pipeline step + screen (ARCH P10, DASH §7) — 89 rings on test v2, 57% laundering members vs 28.5% flagged baseline; screen checked in the browser — 2026-11-24 NP
+- [x] F-14 Retrain path + model versions + Models screen (ARCH §3.2, DASH §8) — retrain, demo-only rule, activate/switch back checked in the browser — 2026-11-24 NP
+- [x] Feedback evaluation with simulated analyst, 3 rounds (FM §11) — test PR-AUC 0.332 → 0.361 (1 seed) — 2026-11-24 NP
+- [x] F-18 UPI-style stress test: inject fast ₹ mule rings into IBM normal background; compare model vs rules vs model+rules on them (stress test only, never trained on, never the headline result; PRD §5) — model 0%, rules 100% (by construction, ~490 false flags) — 2026-11-24 NP
 - [ ] **LAYER 2 DONE**
 
 ## 6. Layer 3

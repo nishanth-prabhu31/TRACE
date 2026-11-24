@@ -1,0 +1,97 @@
+{
+  "dataset": "ibm_hi_small",
+  "model_version": "v2",
+  "cutoff": "2022-09-11 00:00:00",
+  "cuts": {
+    "likely_mule_cut": 40.0,
+    "watch_cut": 4.3
+  },
+  "rings_per_shape": 10,
+  "note": "Stress test only; never trained on.",
+  "FRESH": {
+    "injected_transfers": 248,
+    "injected_mules": 122,
+    "mules_scored": 122,
+    "mule_median_risk": 0.6,
+    "model_likely": {
+      "mules_caught": 0,
+      "recall": 0.0,
+      "real_accounts_also_flagged": 118
+    },
+    "model_watch": {
+      "mules_caught": 0,
+      "recall": 0.0,
+      "real_accounts_also_flagged": 1126
+    },
+    "rules_any": {
+      "mules_caught": 122,
+      "recall": 1.0,
+      "real_accounts_also_flagged": 489
+    },
+    "either": {
+      "mules_caught": 122,
+      "recall": 1.0,
+      "real_accounts_also_flagged": 1596
+    },
+    "recall_by_shape": {
+      "CHAIN": {
+        "model_watch": 0.0,
+        "rules_any": 1.0,
+        "either": 1.0
+      },
+      "FAN": {
+        "model_watch": 0.0,
+        "rules_any": 1.0,
+        "either": 1.0
+      },
+      "CYCLE": {
+        "model_watch": 0.0,
+        "rules_any": 1.0,
+        "either": 1.0
+      }
+    }
+  },
+  "AGED": {
+    "injected_transfers": 806,
+    "injected_mules": 124,
+    "mules_scored": 124,
+    "mule_median_risk": 0.6,
+    "model_likely": {
+      "mules_caught": 0,
+      "recall": 0.0,
+      "real_accounts_also_flagged": 122
+    },
+    "model_watch": {
+      "mules_caught": 16,
+      "recall": 0.129,
+      "real_accounts_also_flagged": 1137
+    },
+    "rules_any": {
+      "mules_caught": 124,
+      "recall": 1.0,
+      "real_accounts_also_flagged": 490
+    },
+    "either": {
+      "mules_caught": 124,
+      "recall": 1.0,
+      "real_accounts_also_flagged": 1610
+    },
+    "recall_by_shape": {
+      "CHAIN": {
+        "model_watch": 0.122,
+        "rules_any": 1.0,
+        "either": 1.0
+      },
+      "FAN": {
+        "model_watch": 0.0,
+        "rules_any": 1.0,
+        "either": 1.0
+      },
+      "CYCLE": {
+        "model_watch": 0.286,
+        "rules_any": 1.0,
+        "either": 1.0
+      }
+    }
+  }
+}

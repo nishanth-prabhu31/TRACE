@@ -1,0 +1,17 @@
+{
+  "step": "replay",
+  "contract_version": 2,
+  "settings_hash": "9001908dbb0b",
+  "random_seed": 42,
+  "started_at": "2026-11-24T11:54:18Z",
+  "finished_at": "2026-11-24T12:27:47Z",
+  "dataset": "ibm_hi_small",
+  "model_version": "v2",
+  "steps": 48,
+  "step_hours": 1,
+  "cuts": {
+    "likely_mule_cut": 40.0,
+    "watch_cut": 4.3
+  },
+  "alert_rows": 59917
+}

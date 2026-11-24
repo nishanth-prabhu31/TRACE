@@ -134,10 +134,10 @@ def write_run(tables: dict[str, pd.DataFrame], manifest: dict, runs_folder: Path
     return final
 
 
-def run_score(dataset: str, split_name: str) -> Path:
-    """Score one period of a dataset with the saved model and write the run folder."""
+def run_score(dataset: str, split_name: str, version: str | None = None) -> Path:
+    """Score one period of a dataset with a saved model (default: settings) and write the run folder."""
     settings = load_settings()
-    version = settings["model"]["version"]
+    version = version or settings["model"]["version"]
     model = load_model(path("models") / version)
     transactions = pd.read_parquet(path("processed") / dataset / c.TRANSACTIONS.filename)
     split = compute_split(transactions, settings["split"])
@@ -167,6 +167,8 @@ def run_score(dataset: str, split_name: str) -> Path:
     print(f"  accounts {manifest['n_accounts']:,}; verdicts {manifest['verdict_counts']}; "
           f"with trail {int(scores['has_trail'].sum()):,}")
     print(f"Wrote {folder}")
+    from trace_aml.pipeline.rings import run_rings      # P10 rings, label-free (F-13)
+    print(f"  rings: {run_rings(manifest['run_id'])}")
     return folder
 
 
@@ -174,8 +176,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="P7 Score a period and write a run folder")
     parser.add_argument("--dataset", required=True, help="dataset name from settings.yaml")
     parser.add_argument("--split", required=True, choices=c.SPLITS, help="period to score")
+    parser.add_argument("--version", help="model version folder under models/ (default: settings)")
     args = parser.parse_args()
-    run_score(args.dataset, args.split)
+    run_score(args.dataset, args.split, args.version)
 
 
 if __name__ == "__main__":
