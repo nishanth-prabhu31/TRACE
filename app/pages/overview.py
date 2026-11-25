@@ -1,8 +1,12 @@
 """Overview: totals and run information (docs/06-DASHBOARD.md section 3)."""
 
+import json
+
 import streamlit as st
 
+from app.components import charts
 from app.logic import navigation
+from trace_aml.config import path
 from app.shared import current_run, money
 
 st.title("Overview")
@@ -28,12 +32,41 @@ if run is not None:
     manifest, scores, transactions = run["manifest"], run["scores"], run["transactions"]
     counts = manifest["verdict_counts"]
 
-    top = st.columns(5)
-    top[0].metric("Transactions", f"{manifest['n_transactions']:,}")
-    top[1].metric("Accounts", f"{manifest['n_accounts']:,}")
-    top[2].metric("Likely mule", f"{counts.get('LIKELY_MULE', 0):,}")
-    top[3].metric("Watch", f"{counts.get('WATCH', 0):,}")
-    top[4].metric("Money in this run", money(transactions["amount"].sum(), short=True))
+    top = st.container(horizontal=True)
+    top.metric("Transactions", f"{manifest['n_transactions']:,}", border=True)
+    top.metric("Accounts", f"{manifest['n_accounts']:,}", border=True)
+    top.metric("Likely mule", f"{counts.get('LIKELY_MULE', 0):,}", border=True)
+    top.metric("Watch", f"{counts.get('WATCH', 0):,}", border=True)
+    top.metric("Money in this run", money(transactions["amount"].sum(), short=True), border=True)
+
+    flagged = scores[scores["verdict"].isin(["LIKELY_MULE", "WATCH"])]
+    cuts_file = path("models") / manifest["model_version"] / "thresholds.json"
+    row = st.columns(2)
+    with row[0].container(border=True):
+        st.markdown("**Who got flagged**")
+        st.altair_chart(charts.verdict_donut(scores))
+        st.caption(f"{len(flagged):,} of {len(scores):,} accounts ({len(flagged) / max(len(scores), 1):.1%}) "
+                   "need a look. TRACE flags; the analyst decides.")
+    with row[1].container(border=True):
+        st.markdown("**How risk is spread**")
+        if cuts_file.exists():
+            cuts = json.loads(cuts_file.read_text(encoding="utf-8"))
+            st.altair_chart(charts.risk_histogram(scores, cuts))
+            st.caption("Almost every account sits near 0; the few right of the dashed lines are flagged.")
+        else:
+            st.caption("No model cut-offs for this run.")
+    if len(flagged):
+        row = st.columns(2)
+        reasons = run["reasons"]
+        top_reasons = reasons[reasons["account_id"].isin(flagged["account_id"]) & (reasons["position"] <= 3)
+                              & (reasons["direction"] == "UP")]
+        with row[0].container(border=True):
+            st.markdown("**Most common reasons for a flag**")
+            st.altair_chart(charts.count_bars(top_reasons["display_name"],
+                                              "Flagged accounts (reason in their top 3)", colour=charts.ACCENT))
+        with row[1].container(border=True):
+            st.markdown("**What the flagged accounts do**")
+            st.altair_chart(charts.count_bars(flagged["short_label"], "Flagged accounts"))
 
     st.subheader("Run")
     kind = {"SPLIT": "split", "UPLOAD": "upload", "DEMO": "demo", "REPLAY": "replay"}[manifest["kind"]]

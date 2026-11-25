@@ -170,7 +170,8 @@ demo:
 
 # --- App (06-DASHBOARD) -----------------------------------------------------
 app:
-  graph_max_nodes: 40
+  graph_max_nodes: 15                   # accounts drawn by default (readability)
+  graph_max_nodes_more: 40              # with "Show more accounts"
   graph_default_hops: 1
   edge_width_px: [1, 8]
   breadcrumb_length: 6
@@ -180,7 +181,7 @@ app:
   graph_height_px: 520
   node_size_px: [16, 26]                # ordinary account, centre account
   # Three risk colours, used the same way everywhere; each also has its own shape.
-  verdict_colours: {LIKELY_MULE: "#B03A2E", WATCH: "#CA8A04", NORMAL: "#4B6584"}
+  verdict_colours: {LIKELY_MULE: "#A23B2A", WATCH: "#B7791F", NORMAL: "#5A6B7F"}
   verdict_shapes: {LIKELY_MULE: triangle, WATCH: diamond, NORMAL: dot}
 
 analysts:                               # PRD F-17: role picker, not security

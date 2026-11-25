@@ -1,7 +1,32 @@
-# Interim look until the final visual design (docs/06-DASHBOARD.md section 9).
+# TRACE look: a bank operations console (docs/06-DASHBOARD.md section 9).
+# Grey canvas, white cards, navy sidebar, one blue for actions, mono for figures.
+# Verdict colours stay in config/settings.yaml (app.verdict_colours).
 [theme]
 base = "light"
-primaryColor = "#2C3E50"
+primaryColor = "#0B4F9C"
+backgroundColor = "#F3F5F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A2433"
+linkColor = "#0B4F9C"
+borderColor = "#DDE2EA"
+showWidgetBorder = true
+baseRadius = "6px"
+buttonRadius = "6px"
+font = "'Public Sans':https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap"
+headingFont = "'Public Sans':https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+baseFontSize = 15
+headingFontSizes = ["26px", "19px", "16px", "15px", "14px", "13px"]
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+linkUnderline = false
+chartCategoricalColors = ["#0B4F9C", "#A23B2A", "#B7791F", "#5A6B7F", "#2F7D5B", "#8A94A3"]
+
+[theme.sidebar]
+backgroundColor = "#0F2440"
+secondaryBackgroundColor = "#17335A"
+textColor = "#E3E9F2"
+borderColor = "#24426B"
+primaryColor = "#E3E9F2"
 
 [browser]
 gatherUsageStats = false

@@ -27,14 +27,18 @@ def on_run_change() -> None:
 def sidebar() -> None:
     """Who am I, which run, which model, which currency."""
     settings = load_settings()
-    st.sidebar.title("TRACE")
-    st.sidebar.caption("Transaction Risk Analytics and Chain Evaluation")
+    st.logo(str(Path(__file__).with_name("logo.svg")), size="large")
+    st.sidebar.html('<p class="trace-sub">Transaction Risk Analytics and Chain Evaluation</p>')
 
     people = {person["name"]: person["role"] for person in data_access.analysts()}
     name = st.sidebar.selectbox("Logged in as", list(people), key="user_name")
     st.sidebar.caption(f"Role: {people[name].title()} · role selection, not security")
 
-    runs = data_access.list_runs()
+    runs = data_access.list_runs()          # newest first
+    # Only the latest upload is offered (plus the saved active run); older uploads stay on disk.
+    saved_run = data_access.get_state(database(), data_access.ACTIVE_RUN_KEY)
+    latest_upload = next((run["run_id"] for run in runs if run.get("kind") == "UPLOAD"), None)
+    runs = [run for run in runs if run.get("kind") != "UPLOAD" or run["run_id"] in (latest_upload, saved_run)]
     st.session_state["runs"] = {run["run_id"]: run for run in runs}
     if not runs:
         st.session_state["run_id"] = None
@@ -60,13 +64,24 @@ def sidebar() -> None:
     st.sidebar.caption("Synthetic data. TRACE ranks and explains; the analyst decides.")
 
 
+st.html(Path(__file__).with_name("style.css"))
 sidebar()
-pages = [
-    st.Page("pages/overview.py", title="Overview", default=True),
-    st.Page("pages/alert_queue.py", title="Alert queue"),
-    st.Page("pages/account.py", title="Account investigation"),
-    st.Page("pages/rings.py", title="Rings"),
-    st.Page("pages/models.py", title="Models"),
-    st.Page("pages/data_quality.py", title="Data quality"),
-]
+pages = {
+    "Investigate": [
+        st.Page("pages/overview.py", title="Overview", default=True),
+        st.Page("pages/alert_queue.py", title="Alert queue"),
+        st.Page("pages/account.py", title="Account investigation"),
+        st.Page("pages/rings.py", title="Rings"),
+    ],
+    "Bring your own data": [
+        st.Page("pages/upload.py", title="Upload & score"),
+        st.Page("pages/playground.py", title="Try transfers"),
+    ],
+    "Evidence": [
+        st.Page("pages/results.py", title="Results"),
+        st.Page("pages/replay.py", title="Caught in time"),
+        st.Page("pages/models.py", title="Models"),
+        st.Page("pages/data_quality.py", title="Data quality"),
+    ],
+}
 st.navigation(pages).run()

@@ -40,7 +40,7 @@ if run is not None:
         st.subheader(f"{chosen}: {int(info['members'])} accounts, {money(info['moved'], short=True)} moved")
         scores = cached_scores_by_account(run["folder"])
         graph = build_ring_graph(cached_network(run["folder"]), scores, members,
-                                 app["graph_max_nodes"], app["hover_max_txns"])
+                                 app.get("graph_max_nodes_more", 40), app["hover_max_txns"])
         left, right = st.columns([3, 2])
         with left:
             if graph["hidden"]:

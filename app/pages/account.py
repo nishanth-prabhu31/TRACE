@@ -40,15 +40,18 @@ def score_card(row: pd.Series, model_version: str) -> None:
 
 
 def network_tab(run: dict, account: str) -> None:
-    two_hops = st.toggle("2 hops", key="graph_two_hops")
+    options = st.container(horizontal=True)
+    two_hops = options.toggle("2 hops", key="graph_two_hops")
+    more = options.toggle("Show more accounts", key="graph_more")
+    limit = APP.get("graph_max_nodes_more", 40) if more else APP["graph_max_nodes"]
     result = build_neighbourhood(cached_network(run["folder"]), cached_scores_by_account(run["folder"]),
                                  run["trails"], account, hops=2 if two_hops else APP["graph_default_hops"],
-                                 max_nodes=APP["graph_max_nodes"], hover_max_txns=APP["hover_max_txns"])
+                                 max_nodes=limit, hover_max_txns=APP["hover_max_txns"])
     if len(result["nodes"]) == 1:
         st.info("This account has no transfers with other accounts in this run.")
         return
     clicked = render_network(result["nodes"], result["edges"], chosen_currency(),
-                             key=f"graph_{account}_{two_hops}_{state.get(navigation.VIEW, 0)}")
+                             key=f"graph_{account}_{two_hops}_{more}_{state.get(navigation.VIEW, 0)}")
     render_legend()
     if result["hidden"]:
         st.caption(f"+{result['hidden']} more accounts not shown")
@@ -185,13 +188,15 @@ if run is not None:
             with main_area:
                 st.header(account)
                 score_card(row, run["manifest"]["model_version"])
-                network, trail, transactions = st.tabs(["Network", "Follow the money", "Transactions"])
-                with network:
-                    network_tab(run, account)
-                with trail:
+                # Only the chosen view is built (hidden tabs would still compute on every rerun).
+                view = st.segmented_control("View", ["Network", "Follow the money", "Transactions"],
+                                            default="Network", key="account_view", label_visibility="collapsed")
+                if view == "Follow the money":
                     trail_tab(run, account, flagged=row["verdict"] != "NORMAL")
-                with transactions:
+                elif view == "Transactions":
                     transactions_tab(run, account)
+                else:
+                    network_tab(run, account)
             with side_area:
                 reasons_panel(run, account, row["verdict"])
                 st.subheader("In plain words")

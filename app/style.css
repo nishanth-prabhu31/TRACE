@@ -1,0 +1,37 @@
+/* TRACE shell: bank-console overrides on top of .streamlit/config.toml. */
+
+/* Hide Streamlit's own chrome. */
+[data-testid="stToolbar"], [data-testid="stDecoration"] { display: none; }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { padding-top: 2rem; max-width: 1300px; }
+
+/* Page title: plain, bold, with the caption under it as a subtitle. */
+h1 { letter-spacing: -0.015em; padding-bottom: .15rem !important; }
+h2, h3 { letter-spacing: -0.005em; }
+
+/* Cards: white on grey, hairline border, faint shadow (no glow, no gradient). */
+[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stMetric"] {
+  background: #FFFFFF; border-color: #DDE2EA !important;
+  box-shadow: 0 1px 2px rgba(16, 36, 64, .06); }
+[data-testid="stMetricLabel"] p { font-size: .8rem !important; font-weight: 500; color: #5B6778; }
+[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 500;
+                                font-size: 1.65rem !important; color: #0F2440; }
+
+/* Tables sit on white. */
+[data-testid="stDataFrame"], [data-testid="stDataEditor"] { background: #FFFFFF;
+  font-variant-numeric: tabular-nums; }
+
+[data-testid="stCaptionContainer"] { color: #5B6778 !important; }
+
+/* Sidebar. */
+.trace-sub { font-size: .72rem; color: #9FB0C7; margin: 0 0 .9rem; padding-bottom: .8rem;
+             border-bottom: 1px solid #24426B; }
+[data-testid="stNavSectionHeader"] { text-transform: uppercase; letter-spacing: .09em;
+                                     font-size: .68rem !important; color: #8FA2BC !important; }
+[data-testid="stSidebarNavLink"] { border-radius: 4px; }
+[data-testid="stSidebarNavLink"][aria-current="page"] { background: #17335A;
+                                                        box-shadow: inset 3px 0 0 #F2B33D; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] { color: #9FB0C7 !important; }
+[data-testid="stSidebar"] [data-testid="stLogo"] { height: 2rem; max-width: 12rem; }
+
+button[kind="primary"] { font-weight: 600; box-shadow: none; }

@@ -58,3 +58,33 @@ def test_saving_a_decision_shows_it_in_the_history(fake_app):
     next(button for button in app.button if button.label == "False positive").click().run()
     assert not app.exception
     assert any("False positive · Analyst A" in caption.value for caption in app.caption)
+
+
+def test_upload_page_shows_errors_for_a_bad_file(fake_app):
+    app = fake_app.run()
+    app.switch_page("pages/upload.py")
+    app.session_state["upload_source"] = ("bad.csv", b"timestamp,sender_id,receiver_id,amount\nnot-a-date,A,B,-3\n")
+    app.run()
+    assert not app.exception
+    text = " ".join(e.value for e in app.error)
+    assert "timestamp" in text and "amount" in text and "line 2" in text
+
+
+def test_upload_page_previews_a_good_file(fake_app):
+    rows = "\n".join(f"2022-09-0{1 + i % 3} 10:{i:02d}:00,A{i % 40},B{i % 35},{1000 + i}" for i in range(60))
+    app = fake_app.run()
+    app.switch_page("pages/upload.py")
+    app.session_state["upload_source"] = ("good.csv", ("timestamp,sender_id,receiver_id,amount\n" + rows).encode())
+    app.run()
+    assert not app.exception and not app.error
+    assert {metric.label: metric.value for metric in app.metric}["Transfers"] == "60"
+    assert any(b.label.startswith("Score this file") for b in app.button)
+
+
+def test_playground_scores_a_scenario(fake_app):
+    app = fake_app.run()
+    app.switch_page("pages/playground.py").run()
+    assert not app.exception
+    next(b for b in app.button if b.label == "Score these transfers").click().run()
+    assert not app.exception and not app.error
+    assert any("Account" in frame.value.columns for frame in app.dataframe)

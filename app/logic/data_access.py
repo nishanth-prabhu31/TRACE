@@ -41,6 +41,9 @@ def run_label(run: dict) -> str:
     """Sidebar text for a run, e.g. 'ibm_hi_small · test · v1'."""
     if run.get("kind") == "DEMO" and run.get("dataset") == "demo":
         return f"Demo run (restyled IBM) · {run.get('model_version', '?')}"
+    if run.get("kind") == "UPLOAD":
+        when = run.get("created_at", "")[5:16].replace("T", " ")       # MM-DD HH:MM (UTC)
+        return f"Upload: {run.get('source_file', 'file')} · {when} · {run.get('model_version', '?')}"
     kind = (run.get("split") or run.get("kind") or "").lower()
     return f"{run.get('dataset', '?')} · {kind} · {run.get('model_version', '?')}"
 

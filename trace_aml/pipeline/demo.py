@@ -24,6 +24,8 @@ Usage:
 
 import argparse
 import json
+import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -42,6 +44,35 @@ DEMO_RUN_ID = "demo__demo__{version}"
 def source_run_id(dataset: str, version: str | None = None) -> str:
     """The full test run the demo run is cut from."""
     return f"{dataset}__test__{version or load_settings()['model']['version']}"
+
+
+UPLOAD_SAMPLE = "demo_upload_10days.csv"
+
+
+def write_upload_sample(dataset: str, mapping: dict | None = None) -> Path:
+    """The sample file for the Upload page: every transfer between the demo slice's accounts
+    over the whole data period (10 days), restyled like the demo file. Scored on its own, a
+    file needs this history: 2 days alone give the model too little to compare against."""
+    s = load_settings()
+    if mapping is None:                                   # the demo slice's accounts (not trail-only ones)
+        account_map = pd.read_csv(path("demo") / "demo_account_map.csv")
+        n_slice = json.loads((path("demo") / "manifest_demo.json").read_text(encoding="utf-8"))["accounts"]
+        in_slice = account_map.sort_values("demo_id").head(n_slice)
+        mapping = dict(zip(in_slice["original_id"], in_slice["demo_id"]))
+    txns = pd.read_parquet(path("processed") / dataset / c.TRANSACTIONS.filename)
+    part = txns[txns["sender_id"].isin(mapping) & txns["receiver_id"].isin(mapping)]
+    part = part.sort_values(["timestamp", "txn_id"])
+    relabel = s["demo"]["channel_relabel"]
+    sample = pd.DataFrame({
+        "timestamp": part["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S"),
+        "sender_id": part["sender_id"].map(mapping), "receiver_id": part["receiver_id"].map(mapping),
+        "amount": (part["amount"] * float(s["currency"]["display_units_per_base"])).round(2),
+        "currency": s["currency"]["display"], "channel": part["channel"].map(lambda ch: relabel.get(ch, ch)),
+    })
+    sample = sample[sample["amount"] > 0]
+    out = path("demo") / UPLOAD_SAMPLE
+    sample.to_csv(out, index=False, encoding="utf-8")
+    return out
 
 
 def recut_demo_run(dataset: str, version: str):
@@ -181,6 +212,7 @@ def build(dataset: str, pattern_id=None) -> dict:
     acc_map.sort_values("demo_id").to_csv(files["account_map"], index=False, encoding="utf-8")
 
     run_folder = build_demo_run(dataset, mapping, acc_map, files["account_map"])
+    write_upload_sample(dataset, mapping)
 
     summary = {"run": str(run_folder) if run_folder else None,
                "dataset": dataset, "pattern_id": str(row["pattern_id"]), "pattern_type": row["pattern_type"],
@@ -230,6 +262,11 @@ def build_demo_run(dataset: str, mapping: dict, acc_map: pd.DataFrame, map_file,
     view["dataset"] = "demo"
     view = view.sort_values(["sender_id", "timestamp"], kind="stable").reset_index(drop=True)
 
+    # Summaries name accounts in their text (e.g. "a 3-hop chain from X to Y"): rename those too,
+    # so no original IBM ID shows in the demo. IDs outside the demo become "an outside account".
+    ibm_id = re.compile(r"\b\d{3,}_[0-9A-F]{6,}\b")
+    scores["summary"] = scores["summary"].map(
+        lambda text: ibm_id.sub(lambda m: full.get(m.group(0), "an outside account"), text))
     for table in (scores, reasons, trails, feats):
         table["account_id"] = table["account_id"].map(full)
     trails["from_id"] = trails["from_id"].map(full)
